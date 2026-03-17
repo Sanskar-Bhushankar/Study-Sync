@@ -50,17 +50,4 @@ async function reorder(req, res, next) {
   }
 }
 
-async function bulkCreate(req, res, next) {
-  try {
-    const { topics } = req.body;
-    if (!Array.isArray(topics) || topics.length === 0) {
-      return res.status(400).json({ success: false, error: { message: 'topics array required' } });
-    }
-    const data = await topicService.bulkCreate(req.params.projectId, topics);
-    res.status(201).json({ success: true, data });
-  } catch (e) {
-    next(e);
-  }
-}
-
-module.exports = { create, list, update, remove, reorder, bulkCreate };
+module.exports = { create, list, update, remove, reorder };
