@@ -13,9 +13,27 @@ const completionRoutes = require('./routes/completion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const errorHandler = require('./middleware/errorHandler');
 
+const ALLOWED_ORIGINS = [
+  'https://study-sync-475p.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
 const app = express();
-app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({
+  origin: (origin, callback) => {
+    // allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+// Respond to all pre-flight OPTIONS requests immediately
+app.options('*', cors());
 
 // Generous limit for normal API usage (500 req/min)
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false });
