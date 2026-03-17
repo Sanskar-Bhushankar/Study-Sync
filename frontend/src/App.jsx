@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
+import Invitations from './pages/Invitations';
 import './index.css';
 
 function PrivateRoute({ children }) {
@@ -21,6 +22,7 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
       <Route path="/projects/:projectId" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
+      <Route path="/invitations" element={<PrivateRoute><Invitations /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

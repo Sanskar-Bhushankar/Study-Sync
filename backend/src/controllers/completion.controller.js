@@ -5,6 +5,7 @@ async function complete(req, res, next) {
     const data = await completionService.completeTopic(req.params.projectId, req.params.topicId, req.user.id, req.file);
     res.status(201).json({ success: true, data });
   } catch (e) {
+    console.error('[complete] Error:', JSON.stringify(e, null, 2), e.message, e.stack);
     next(e);
   }
 }

@@ -5,17 +5,53 @@ const { BadRequestError, ConflictError, NotFoundError } = require('../utils/erro
 async function completeTopic(projectId, topicId, userId, file) {
   const { data: topic } = await supabase.from('topics').select('id').eq('id', topicId).eq('project_id', projectId).single();
   if (!topic) throw new NotFoundError('Topic not found');
+
   const { data: subtopics } = await supabase.from('subtopics').select('id').eq('topic_id', topicId);
   const subIds = (subtopics || []).map((s) => s.id);
   if (subIds.length) {
-    const { data: completed } = await supabase.from('subtopic_progress').select('id').eq('user_id', userId).eq('project_id', projectId).in('subtopic_id', subIds).eq('is_completed', true);
-    if ((completed?.length || 0) < subIds.length) throw new BadRequestError('You must complete all subtopics before uploading notes', 'TOPIC_NOT_COMPLETE');
+    const { data: completed } = await supabase
+      .from('subtopic_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('project_id', projectId)
+      .in('subtopic_id', subIds)
+      .eq('is_completed', true);
+    if ((completed?.length || 0) < subIds.length) {
+      throw new BadRequestError('You must complete all subtopics before uploading notes', 'TOPIC_NOT_COMPLETE');
+    }
   }
+
   const { data: existing } = await supabase.from('topic_completions').select('id').eq('topic_id', topicId).eq('user_id', userId).single();
   if (existing) throw new ConflictError('Topic already completed');
-  const { storagePath, signedUrl, notesType } = await storageService.uploadNote(projectId, topicId, userId, file.buffer, file.mimetype, file.originalname);
-  const { data, error } = await supabase.from('topic_completions').insert({ topic_id: topicId, user_id: userId, project_id: projectId, notes_url: storagePath, notes_type: notesType }).select().single();
-  if (error) throw error;
+
+  // Upload file to storage
+  console.log('[completeTopic] Uploading to storage, file:', file?.originalname, file?.mimetype, file?.buffer?.length);
+  let storagePath, signedUrl, notesType;
+  try {
+    const result = await storageService.uploadNote(projectId, topicId, userId, file.buffer, file.mimetype, file.originalname);
+    storagePath = result.storagePath;
+    signedUrl = result.signedUrl;
+    notesType = result.notesType;
+  } catch (storageErr) {
+    console.error('[completeTopic] Storage upload error:', JSON.stringify(storageErr), storageErr?.message);
+    throw storageErr;
+  }
+
+  console.log('[completeTopic] Storage OK, inserting DB record...');
+  const { data, error } = await supabase
+    .from('topic_completions')
+    .insert({ topic_id: topicId, user_id: userId, project_id: projectId, notes_url: storagePath, notes_type: notesType })
+    .select()
+    .single();
+  if (error) {
+    console.error('[completeTopic] DB insert error — code:', error.code, '| message:', error.message, '| hint:', error.hint, '| details:', error.details);
+    // Surface a readable message: if it's an RLS error, give a clear hint
+    const isRls = error.code === '42501' || (error.message || '').toLowerCase().includes('rls') || (error.message || '').toLowerCase().includes('policy');
+    const msg = isRls
+      ? `Database permission denied (RLS policy). Run the SQL fix in Supabase. Original: ${error.message}`
+      : (error.message || JSON.stringify(error));
+    throw new Error(msg);
+  }
   return { ...data, signed_url: signedUrl };
 }
 
