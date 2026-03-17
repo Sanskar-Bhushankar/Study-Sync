@@ -513,15 +513,8 @@ export default function ProjectDetail() {
     if (!parsed.length) { showToast('No topics found. Use # for topics and - for subtopics.', 'error'); return; }
     setMdSaving(true);
     try {
-      for (const t of parsed) {
-        const tr = await api.post(`/projects/${projectId}/topics`, { title: t.title });
-        const topicId = tr.data?.id;
-        if (topicId) {
-          for (let i = 0; i < t.subtopics.length; i++) {
-            await api.post(`/projects/${projectId}/topics/${topicId}/subtopics`, { title: t.subtopics[i], order_index: i });
-          }
-        }
-      }
+      // Single bulk API call instead of one request per topic+subtopic
+      await api.post(`/projects/${projectId}/topics/bulk`, { topics: parsed });
       await loadTopics();
       setMdText('');
       setSyllabusMode('ui');
