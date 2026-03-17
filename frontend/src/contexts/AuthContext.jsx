@@ -1,43 +1,50 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { api, setToken, getToken } from '../api';
+import { api, setToken, getToken, saveRefreshToken, clearRefreshToken } from '../api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const initialized = useRef(false);
+  const initialized           = useRef(false);
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
-    // Always try to restore session via refresh-token cookie on page load.
-    // The cookie is HttpOnly so JS can't read it — but the server can use it.
     (async () => {
       try {
-        // 1. If we already have a live in-memory token, just fetch the profile
+        // If we already have a live in-memory token, just fetch the profile
         if (getToken()) {
           const me = await api.get('/users/me');
           setUser(me.data);
           return;
         }
-        // 2. No in-memory token → try the refresh cookie (survives page reload)
-        const r = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/v1/auth/refresh`, {
+        // Try to restore session using stored refresh token (cookie OR localStorage)
+        const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        const storedRt = (() => { try { return localStorage.getItem('ss_rt'); } catch (_) { return null; } })();
+        const body = storedRt ? JSON.stringify({ refresh_token: storedRt }) : undefined;
+        const r = await fetch(`${BASE}/api/v1/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body,
         });
         if (r.ok) {
           const d = await r.json().catch(() => ({}));
           if (d.access_token) {
             setToken(d.access_token);
+            if (d.refresh_token) saveRefreshToken(d.refresh_token);
             const me = await api.get('/users/me');
             setUser(me.data);
             return;
           }
         }
+        // No valid session
+        clearRefreshToken();
+        setToken(null);
       } catch (_) {
-        // no valid session — stay logged out
+        clearRefreshToken();
         setToken(null);
       } finally {
         setLoading(false);
@@ -48,6 +55,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const r = await api.post('/auth/login', { email, password });
     setToken(r.access_token);
+    if (r.refresh_token) saveRefreshToken(r.refresh_token);
     const me = await api.get('/users/me');
     setUser(me.data);
     return me;
@@ -58,6 +66,7 @@ export function AuthProvider({ children }) {
     const session = r.data?.session;
     if (session?.access_token) {
       setToken(session.access_token);
+      if (session.refresh_token) saveRefreshToken(session.refresh_token);
       const me = await api.get('/users/me');
       setUser(me.data);
       return me;
@@ -72,6 +81,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try { await api.post('/auth/logout'); } catch (_) {}
     setToken(null);
+    clearRefreshToken();
     setUser(null);
   };
 

@@ -18,8 +18,14 @@ async function login(req, res, next) {
     requireFields(req.body, ['email', 'password']);
     const data = await authService.login(req.body.email, req.body.password);
     const { access_token, refresh_token } = data.session;
-    res.cookie('refresh_token', refresh_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 60 * 60 * 24 * 7 * 1000 });
-    res.json({ success: true, access_token });
+    res.cookie('refresh_token', refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 60 * 60 * 24 * 7 * 1000,
+    });
+    // also return refresh_token in body so cross-origin clients can store it
+    res.json({ success: true, access_token, refresh_token });
   } catch (e) {
     next(e);
   }
@@ -35,9 +41,13 @@ async function logout(req, res, next) {
 }
 
 function getRefreshToken(req) {
+  // 1. try HttpOnly cookie (same-domain / native app)
   const cookie = req.headers.cookie || '';
   const m = cookie.match(/refresh_token=([^;]+)/);
-  return m ? m[1].trim() : null;
+  if (m) return m[1].trim();
+  // 2. fallback: body field (cross-origin clients that can't send cookies)
+  if (req.body?.refresh_token) return req.body.refresh_token;
+  return null;
 }
 
 async function refresh(req, res, next) {
@@ -46,8 +56,14 @@ async function refresh(req, res, next) {
     if (!token) return next(new (require('../utils/errors').UnauthorizedError)('No refresh token'));
     const data = await authService.refreshSession(token);
     const { access_token, refresh_token } = data.session;
-    res.cookie('refresh_token', refresh_token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 60 * 60 * 24 * 7 * 1000 });
-    res.json({ success: true, access_token });
+    res.cookie('refresh_token', refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 60 * 60 * 24 * 7 * 1000,
+    });
+    // also return new refresh_token in body for cross-origin clients
+    res.json({ success: true, access_token, refresh_token });
   } catch (e) {
     next(e);
   }

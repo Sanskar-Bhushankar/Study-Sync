@@ -34,13 +34,15 @@ const corsOptions = {
 
 const app = express();
 
-// Must set CORS headers before helmet so they aren't stripped
+// CORS before everything else — Vercel edge headers also set in vercel.json
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
+// Disable helmet policies that conflict with cross-origin responses
 app.use(helmet({
-  crossOriginResourcePolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: false,
+  contentSecurityPolicy: false,
 }));
 
 // Generous limit for normal API usage (500 req/min)
