@@ -34,7 +34,7 @@ async function getDashboard(projectId) {
   });
   const leaderboard = [...memberStats].sort((a, b) => b.completion_percentage - a.completion_percentage).map((m, i) => ({ rank: i + 1, ...m }));
   const byUser = {};
-  (progress?.data || []).forEach((p) => {
+  (progress || []).forEach((p) => {
     const d = p.completed_at?.slice(0, 10);
     if (!byUser[p.user_id]) byUser[p.user_id] = {};
     if (!byUser[p.user_id][d]) byUser[p.user_id][d] = 0;

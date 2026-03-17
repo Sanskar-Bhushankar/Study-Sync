@@ -17,6 +17,34 @@ function Badge({ children, color = 'owner' }) {
   );
 }
 
+/* ─── Skeleton ─── */
+function Skeleton({ w = '100%', h = 16, r = 6, style: extra = {} }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: 'linear-gradient(90deg, var(--border) 25%, var(--code-bg) 50%, var(--border) 75%)',
+      backgroundSize: '200% 100%',
+      animation: 'shimmer 1.4s infinite',
+      flexShrink: 0,
+      ...extra,
+    }} />
+  );
+}
+
+function ProjectCardSkeleton() {
+  return (
+    <div style={{ borderRadius: 14, border: '1px solid var(--border)', background: 'var(--bg)', padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Skeleton w={36} h={36} r={8} />
+        <Skeleton w={52} h={20} r={10} />
+      </div>
+      <Skeleton w="70%" h={16} r={5} />
+      <Skeleton w="90%" h={12} r={4} />
+      <Skeleton w="50%" h={10} r={4} />
+    </div>
+  );
+}
+
 export default function Projects() {
   const [list, setList]         = useState([]);
   const [title, setTitle]       = useState('');
@@ -25,6 +53,7 @@ export default function Projects() {
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -35,8 +64,8 @@ export default function Projects() {
     api.get('/users/me/invites').then((r) => setPendingCount((r.data || []).length)).catch(() => {}), []);
 
   useEffect(() => {
-    loadProjects();
-    loadInviteCount();
+    setLoadingProjects(true);
+    Promise.all([loadProjects(), loadInviteCount()]).finally(() => setLoadingProjects(false));
   }, [loadProjects, loadInviteCount]);
 
   async function createProject(e) {
@@ -55,6 +84,8 @@ export default function Projects() {
   if (!user) { navigate('/login'); return null; }
 
   return (
+    <>{/* shimmer keyframes */}
+    <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
     <div style={{ minHeight: '100svh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       {/* ── header ── */}
       <header style={{
@@ -127,7 +158,11 @@ export default function Projects() {
         )}
 
         {/* ── projects grid ── */}
-        {list.length === 0 ? (
+        {loadingProjects ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+            {[1,2,3,4,5,6].map(i => <ProjectCardSkeleton key={i} />)}
+          </div>
+        ) : list.length === 0 ? (
           <div style={{ padding: 60, borderRadius: 16, border: '2px dashed var(--border)', textAlign: 'center' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
             <h2 style={{ margin: '0 0 8px', color: 'var(--text-h)', fontWeight: 700 }}>No projects yet</h2>
@@ -167,5 +202,6 @@ export default function Projects() {
         )}
       </main>
     </div>
+    </>
   );
 }

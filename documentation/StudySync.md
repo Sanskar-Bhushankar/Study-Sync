@@ -172,6 +172,53 @@ Manages the full invite lifecycle. Invites can be issued to emails that haven't 
 
 ---
 
+### 2.9 Row Level Security (RLS) Policies
+
+If you are setting up this project from scratch, you **must** run the following SQL queries in your Supabase SQL Editor to allow users to upload files and update their completion status safely.
+
+#### `topic_completions` Table Policies:
+```sql
+ALTER TABLE public.topic_completions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Members can insert own completions"
+ON public.topic_completions FOR INSERT
+WITH CHECK (
+  auth.uid() = user_id AND EXISTS (
+    SELECT 1 FROM public.project_members
+    WHERE project_members.project_id = topic_completions.project_id AND project_members.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Members can view completions in their projects"
+ON public.topic_completions FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.project_members
+    WHERE project_members.project_id = topic_completions.project_id AND project_members.user_id = auth.uid()
+  )
+);
+```
+
+#### `study-notes` Storage Bucket Policies:
+```sql
+-- Allow authenticated users to upload files to study-notes
+CREATE POLICY "Authenticated users can upload notes"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'study-notes' AND auth.role() = 'authenticated');
+
+-- Allow authenticated users to read/view files from study-notes
+CREATE POLICY "Authenticated users can read notes"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'study-notes' AND auth.role() = 'authenticated');
+
+-- Allow users to delete their own notes
+CREATE POLICY "Users can delete own notes"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'study-notes' AND auth.uid()::text = (storage.foldername(name))[3]);
+```
+
+---
+
 ## 3. Supabase Storage
 
 ### 3.1 Bucket Name

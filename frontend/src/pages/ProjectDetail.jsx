@@ -101,6 +101,260 @@ function ProgressBar({ pct, color = 'var(--accent)' }) {
   );
 }
 
+/* ─── Skeleton ─── */
+function Skeleton({ w = '100%', h = 16, r = 6, style: extra = {} }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: 'linear-gradient(90deg, var(--border) 25%, var(--code-bg) 50%, var(--border) 75%)',
+      backgroundSize: '200% 100%',
+      animation: 'shimmer 1.4s infinite',
+      flexShrink: 0,
+      ...extra,
+    }} />
+  );
+}
+
+/* ─── Dashboard Skeleton ─── */
+function DashboardSkeleton() {
+  return (
+    <div>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      {/* contribution graph skeleton */}
+      <Skeleton h={110} r={12} style={{ marginBottom: 28 }} />
+      {/* stat cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14, marginBottom: 28 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} style={{ borderRadius: 12, border: '1px solid var(--border)', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            <Skeleton w={36} h={36} r={8} />
+            <Skeleton w="60%" h={22} r={6} />
+            <Skeleton w="80%" h={12} r={4} />
+          </div>
+        ))}
+      </div>
+      {/* leaderboard skeleton */}
+      <Skeleton w={160} h={18} r={6} style={{ marginBottom: 14 }} />
+      <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 28 }}>
+        {[1,2,3].map(i => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+            <Skeleton w={28} h={28} r={14} />
+            <Skeleton w={34} h={34} r={17} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Skeleton w="40%" h={12} r={4} />
+              <Skeleton w="100%" h={6} r={3} />
+              <Skeleton w="60%" h={10} r={4} />
+            </div>
+            <Skeleton w={40} h={18} r={4} />
+          </div>
+        ))}
+      </div>
+      {/* activity table skeleton */}
+      <Skeleton w={140} h={18} r={6} style={{ marginBottom: 14 }} />
+      <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+        {[1,2,3].map(i => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
+            <Skeleton w={30} h={30} r={15} />
+            <Skeleton w="30%" h={12} r={4} />
+            <div style={{ flex: 1 }} />
+            <Skeleton w={120} h={10} r={4} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── GitHub-style contribution graph ─── */
+function ContributionGraph({ timeline, members: memberList, memberMap }) {
+  const TODAY = new Date();
+  const WEEKS = 26;
+  const TOTAL_DAYS = WEEKS * 7;
+
+  // Build a map of date → total completions across all users
+  const dateTotals = {};
+  Object.values(timeline || {}).forEach((entries) => {
+    if (!Array.isArray(entries)) return;
+    let prev = 0;
+    entries.forEach(({ date, cumulative_subtopics }) => {
+      const daily = cumulative_subtopics - prev;
+      prev = cumulative_subtopics;
+      dateTotals[date] = (dateTotals[date] || 0) + Math.max(0, daily);
+    });
+  });
+
+  // Build a per-user daily map
+  const userDailyMap = {};
+  Object.entries(timeline || {}).forEach(([uid, entries]) => {
+    if (!Array.isArray(entries)) return;
+    userDailyMap[uid] = {};
+    let prev = 0;
+    entries.forEach(({ date, cumulative_subtopics }) => {
+      const daily = cumulative_subtopics - prev;
+      prev = cumulative_subtopics;
+      userDailyMap[uid][date] = Math.max(0, daily);
+    });
+  });
+
+  const maxVal = Math.max(1, ...Object.values(dateTotals));
+
+  function getColor(count) {
+    if (!count) return 'var(--border)';
+    const intensity = count / maxVal;
+    if (intensity < 0.25) return 'rgba(170,59,255,0.25)';
+    if (intensity < 0.5)  return 'rgba(170,59,255,0.5)';
+    if (intensity < 0.75) return 'rgba(170,59,255,0.75)';
+    return 'rgba(170,59,255,1)';
+  }
+
+  // Build grid: columns = weeks (oldest left), rows = days (Sun→Sat)
+  const days = [];
+  for (let i = TOTAL_DAYS - 1; i >= 0; i--) {
+    const d = new Date(TODAY);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    days.push({ dateStr, count: dateTotals[dateStr] || 0 });
+  }
+
+  // Pad so grid starts on Sunday
+  const firstDow = new Date(days[0].dateStr).getDay();
+  const padded = [...Array(firstDow).fill(null), ...days];
+  const weeks = [];
+  for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7));
+
+  // Month labels
+  const monthLabels = [];
+  weeks.forEach((wk, wi) => {
+    const firstReal = wk.find(Boolean);
+    if (firstReal) {
+      const d = new Date(firstReal.dateStr);
+      if (d.getDate() <= 7) {
+        monthLabels.push({ wi, label: d.toLocaleString('default', { month: 'short' }) });
+      }
+    }
+  });
+
+  const [tooltip, setTooltip] = useState(null);
+
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '18px 20px', marginBottom: 28, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-h)' }}>📅 Activity Heatmap</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text)' }}>
+          <span>Less</span>
+          {['var(--border)','rgba(170,59,255,0.25)','rgba(170,59,255,0.5)','rgba(170,59,255,0.75)','rgba(170,59,255,1)'].map((c,i) => (
+            <div key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,0.1)' }} />
+          ))}
+          <span>More</span>
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', minWidth: 0 }}>
+        {/* month labels row */}
+        <div style={{ display: 'flex', marginBottom: 4, paddingLeft: 22 }}>
+          {weeks.map((_, wi) => {
+            const ml = monthLabels.find(m => m.wi === wi);
+            return <div key={wi} style={{ width: 13, marginRight: 2, fontSize: 9, color: 'var(--text)', textAlign: 'left', flexShrink: 0 }}>{ml?.label || ''}</div>;
+          })}
+        </div>
+
+        <div style={{ display: 'flex', gap: 0 }}>
+          {/* day labels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4, paddingTop: 0 }}>
+            {['','M','','W','','F',''].map((d, i) => (
+              <div key={i} style={{ height: 11, fontSize: 9, color: 'var(--text)', lineHeight: '11px', width: 14, textAlign: 'right' }}>{d}</div>
+            ))}
+          </div>
+
+          {/* grid */}
+          <div style={{ display: 'flex', gap: 2 }}>
+            {weeks.map((wk, wi) => (
+              <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {wk.map((day, di) => (
+                  <div
+                    key={di}
+                    onMouseEnter={day ? (e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const who = Object.entries(userDailyMap)
+                        .filter(([, m]) => m[day.dateStr] > 0)
+                        .map(([uid, m]) => `${memberMap[uid] || uid}: ${m[day.dateStr]}`)
+                        .join(', ');
+                      setTooltip({ x: rect.left, y: rect.top - 40, text: `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}${who ? ` (${who})` : ''}` });
+                    } : undefined}
+                    onMouseLeave={() => setTooltip(null)}
+                    style={{
+                      width: 11, height: 11, borderRadius: 2,
+                      background: day ? getColor(day.count) : 'transparent',
+                      border: day ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                      cursor: day ? 'pointer' : 'default',
+                      transition: 'transform 0.1s',
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {tooltip && (
+        <div style={{
+          position: 'fixed', left: tooltip.x, top: tooltip.y,
+          background: 'var(--code-bg)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '5px 10px', fontSize: 11,
+          color: 'var(--text-h)', zIndex: 9999, pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxWidth: 280, whiteSpace: 'pre-wrap',
+        }}>{tooltip.text}</div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Mini bar chart ─── */
+function BarChart({ data, title, color = 'var(--accent)' }) {
+  const maxVal = Math.max(1, ...data.map(d => d.value));
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '16px 18px' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-h)', marginBottom: 14 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 80 }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+            <div style={{ fontSize: 9, color: 'var(--text)', fontWeight: 700 }}>{d.value > 0 ? d.value : ''}</div>
+            <div style={{
+              width: '100%', background: color, borderRadius: '3px 3px 0 0',
+              height: `${(d.value / maxVal) * 100}%`, minHeight: d.value ? 4 : 0,
+              transition: 'height 0.4s ease', opacity: 0.85,
+            }} />
+            <div style={{ fontSize: 9, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center' }}>{d.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Donut / ring chart ─── */
+function RingChart({ pct, color = 'var(--accent)', label, sublabel }) {
+  const r = 36, cx = 44, cy = 44, stroke = 8;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <div style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <svg width={88} height={88} viewBox="0 0 88 88">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circ - dash}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: 'stroke-dasharray 0.6s ease' }}
+        />
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="var(--text-h)" fontSize={14} fontWeight={800}>{Math.round(pct)}%</text>
+      </svg>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-h)', textAlign: 'center' }}>{label}</div>
+      {sublabel && <div style={{ fontSize: 11, color: 'var(--text)', textAlign: 'center' }}>{sublabel}</div>}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════
    PARSE MARKDOWN SYLLABUS
    # Topic Title
@@ -133,6 +387,7 @@ export default function ProjectDetail() {
   const [members, setMembers]   = useState([]);
   const [invites, setInvites]   = useState([]);
   const [dashboard, setDashboard] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const [allNotes, setAllNotes] = useState({}); // topicId → [completion]
   const [tab, setTab]           = useState('syllabus');
   const [loading, setLoading]   = useState(true);
@@ -167,7 +422,13 @@ export default function ProjectDetail() {
   const loadProgress = useCallback(() => api.get(`/projects/${projectId}/progress`).then((r) => setProgress(r)).catch(() => {}), [projectId]);
   const loadMembers  = useCallback(() => api.get(`/projects/${projectId}/members`).then((r) => setMembers(r.data || [])).catch(() => {}), [projectId]);
   const loadInvites  = useCallback(() => api.get(`/projects/${projectId}/invites`).then((r) => setInvites(r.data || [])).catch(() => {}), [projectId]);
-  const loadDashboard = useCallback(() => api.get(`/projects/${projectId}/dashboard`).then((r) => setDashboard(r.data)).catch(() => {}), [projectId]);
+  const loadDashboard = useCallback(() => {
+    setDashboardLoading(true);
+    return api.get(`/projects/${projectId}/dashboard`)
+      .then((r) => setDashboard(r))
+      .catch(() => {})
+      .finally(() => setDashboardLoading(false));
+  }, [projectId]);
 
   const loadAllNotes = useCallback(async (list) => {
     const result = {};
@@ -322,7 +583,34 @@ export default function ProjectDetail() {
   /* ─── guards ─── */
   if (!user) { navigate('/login'); return null; }
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text)', opacity: 0.5 }}>Loading…</div>
+    <div style={{ minHeight: '100svh', background: 'var(--bg)' }}>
+      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      {/* header skeleton */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Skeleton w={24} h={24} r={6} />
+          <Skeleton w={140} h={18} r={6} />
+        </div>
+        <Skeleton w={80} h={32} r={7} />
+      </div>
+      {/* tabs skeleton */}
+      <div style={{ display: 'flex', gap: 8, padding: '10px 24px', borderBottom: '1px solid var(--border)' }}>
+        {[80, 80, 60, 90].map((w, i) => <Skeleton key={i} w={w} h={30} r={99} />)}
+      </div>
+      {/* content skeleton */}
+      <div style={{ maxWidth: 800, margin: '28px auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {[1,2,3].map(i => (
+          <div key={i} style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', background: 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
+              <Skeleton w="40%" h={16} r={5} />
+            </div>
+            <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[1,2,3].map(j => <Skeleton key={j} w={`${70 + j * 8}%`} h={12} r={4} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
   if (!project) return (
     <div style={{ padding: 40, textAlign: 'center', color: 'var(--text)' }}>
@@ -639,48 +927,117 @@ export default function ProjectDetail() {
         {/* ════════ DASHBOARD TAB ════════ */}
         {tab === 'dashboard' && (
           <div>
-            {tab === 'dashboard' && !dashboard && (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text)', opacity: 0.5 }}>Loading stats…</div>
-            )}
-            {dashboard && (
+            <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+
+            {dashboardLoading || !dashboard ? (
+              <DashboardSkeleton />
+            ) : (
               <>
-                {/* summary cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginBottom: 32 }}>
+                {/* ── Contribution / Activity Heatmap ── */}
+                <ContributionGraph
+                  timeline={dashboard.timeline}
+                  members={dashboard.members}
+                  memberMap={memberMap}
+                />
+
+                {/* ── Summary stat cards ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 14, marginBottom: 28 }}>
                   {[
-                    { label: 'Topics', value: dashboard.project?.total_topics ?? 0, icon: '📖' },
-                    { label: 'Subtopics', value: dashboard.project?.total_subtopics ?? 0, icon: '📝' },
-                    { label: 'Members', value: members.length, icon: '👥' },
+                    { label: 'Topics', value: dashboard.project?.total_topics ?? 0, icon: '📖', color: '#3b82f6' },
+                    { label: 'Subtopics', value: dashboard.project?.total_subtopics ?? 0, icon: '📝', color: '#10b981' },
+                    { label: 'Members', value: (dashboard.members || []).length, icon: '👥', color: '#f59e0b' },
+                    { label: 'Completions', value: (dashboard.members || []).reduce((s, m) => s + m.subtopics_completed, 0), icon: '✅', color: '#aa3bff' },
                   ].map((card) => (
-                    <div key={card.label} style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '18px 20px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                      <div style={{ fontSize: 28 }}>{card.icon}</div>
-                      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-h)', lineHeight: 1.1, marginTop: 6 }}>{card.value}</div>
-                      <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 4 }}>{card.label}</div>
+                    <div key={card.label} style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '18px 14px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ fontSize: 26 }}>{card.icon}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: card.color, lineHeight: 1.1, marginTop: 6 }}>{card.value}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 4 }}>{card.label}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* leaderboard */}
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>🏆 Leaderboard</h2>
-                <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 32 }}>
+                {/* ── Ring charts row (per-member completion rings) ── */}
+                {(dashboard.members || []).length > 0 && (
+                  <>
+                    <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>📊 Completion Overview</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 28 }}>
+                      {(dashboard.members || []).map((m, i) => {
+                        const ringColors = ['#aa3bff','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+                        return (
+                          <RingChart
+                            key={m.user_id}
+                            pct={m.completion_percentage}
+                            color={ringColors[i % ringColors.length]}
+                            label={m.full_name?.split(' ')[0] || 'User'}
+                            sublabel={`${m.subtopics_completed}/${m.subtopics_total}`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* ── Bar charts ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 28 }}>
+                  <BarChart
+                    title="📝 Subtopics Completed per Member"
+                    color="#aa3bff"
+                    data={(dashboard.members || []).map(m => ({
+                      label: m.full_name?.split(' ')[0] || 'User',
+                      value: m.subtopics_completed,
+                    }))}
+                  />
+                  <BarChart
+                    title="📚 Topics with Notes per Member"
+                    color="#3b82f6"
+                    data={(dashboard.members || []).map(m => ({
+                      label: m.full_name?.split(' ')[0] || 'User',
+                      value: m.topics_completed,
+                    }))}
+                  />
+                </div>
+
+                {/* ── Leaderboard table ── */}
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>🏆 Leaderboard</h2>
+                <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 28 }}>
+                  {/* table header */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 90px 90px 100px', gap: 0, padding: '9px 18px', background: 'var(--code-bg)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    <div>#</div><div>Member</div><div style={{ textAlign: 'center' }}>Subtopics</div><div style={{ textAlign: 'center' }}>Notes</div><div style={{ textAlign: 'right' }}>Progress</div>
+                  </div>
                   {(dashboard.leaderboard || []).map((m, i) => {
                     const barColors = ['#f59e0b', '#94a3b8', '#cd7c4c'];
                     const rankColor = barColors[i] || 'var(--accent)';
+                    const isMe = m.user_id === user.id;
                     return (
-                      <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < dashboard.leaderboard.length - 1 ? '1px solid var(--border)' : 'none', background: m.user_id === user.id ? 'var(--accent-bg)' : 'var(--bg)' }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: rankColor, width: 28, textAlign: 'center', flexShrink: 0 }}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${m.rank}`}
-                        </div>
-                        <Avatar name={m.full_name} size={34} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                            <span style={{ fontWeight: 600, color: 'var(--text-h)', fontSize: 14 }}>
-                              {m.full_name || 'Unknown'}{m.user_id === user.id && <span style={{ fontSize: 11, color: 'var(--text)', marginLeft: 6 }}>(you)</span>}
-                            </span>
-                            <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 14 }}>{m.completion_percentage.toFixed(1)}%</span>
+                      <div key={m.user_id} style={{ borderBottom: i < dashboard.leaderboard.length - 1 ? '1px solid var(--border)' : 'none', background: isMe ? 'var(--accent-bg)' : 'var(--bg)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 90px 90px 100px', gap: 0, padding: '12px 18px', alignItems: 'center' }}>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: rankColor, textAlign: 'center' }}>
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${m.rank}`}
                           </div>
-                          <ProgressBar pct={m.completion_percentage} color={m.user_id === user.id ? 'var(--accent)' : rankColor} />
-                          <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 4 }}>
-                            {m.subtopics_completed}/{m.subtopics_total} subtopics · {m.topics_completed}/{m.topics_total} topics with notes
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <Avatar name={m.full_name} size={30} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text-h)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {m.full_name || 'Unknown'}{isMe && <span style={{ fontSize: 10, color: 'var(--text)', marginLeft: 5 }}>(you)</span>}
+                              </div>
+                              {m.last_activity && (
+                                <div style={{ fontSize: 10, color: 'var(--text)' }}>
+                                  Active {new Date(m.last_activity).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text-h)' }}>
+                            {m.subtopics_completed}<span style={{ fontSize: 10, color: 'var(--text)', fontWeight: 400 }}>/{m.subtopics_total}</span>
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text-h)' }}>
+                            {m.topics_completed}<span style={{ fontSize: 10, color: 'var(--text)', fontWeight: 400 }}>/{m.topics_total}</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: isMe ? 'var(--accent)' : rankColor }}>{m.completion_percentage.toFixed(1)}%</span>
+                            <div style={{ marginTop: 4 }}>
+                              <ProgressBar pct={m.completion_percentage} color={isMe ? 'var(--accent)' : rankColor} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -688,20 +1045,83 @@ export default function ProjectDetail() {
                   })}
                 </div>
 
-                {/* last activity */}
-                <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>📅 Last Activity</h2>
-                <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                  {(dashboard.members || []).sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0)).map((m, i, arr) => (
-                    <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--bg)' }}>
-                      <Avatar name={m.full_name} size={30} />
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-h)', fontSize: 14 }}>{m.full_name || 'Unknown'}</span>
-                      </div>
-                      <span style={{ fontSize: 12, color: 'var(--text)' }}>
-                        {m.last_activity ? `Last active ${new Date(m.last_activity).toLocaleDateString()}` : 'No activity yet'}
-                      </span>
+                {/* ── Head-to-head comparison table ── */}
+                {(dashboard.members || []).length > 1 && (
+                  <>
+                    <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>⚔️ Head-to-Head Comparison</h2>
+                    <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 28, overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: 'var(--code-bg)' }}>
+                            <th style={{ padding: '9px 18px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>Member</th>
+                            <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>% Done</th>
+                            <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>Subtopics</th>
+                            <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>Notes</th>
+                            <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>Remaining</th>
+                            <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(dashboard.leaderboard || []).map((m, i) => {
+                            const remaining = m.subtopics_total - m.subtopics_completed;
+                            const pct = m.completion_percentage;
+                            const statusColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444';
+                            const statusLabel = pct >= 80 ? 'On Track' : pct >= 50 ? 'In Progress' : 'Just Started';
+                            return (
+                              <tr key={m.user_id} style={{ background: m.user_id === user.id ? 'var(--accent-bg)' : i % 2 === 0 ? 'var(--bg)' : 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '11px 18px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Avatar name={m.full_name} size={26} />
+                                    <span style={{ fontWeight: 600, color: 'var(--text-h)' }}>{m.full_name || 'Unknown'}{m.user_id === user.id && <span style={{ fontSize: 10, color: 'var(--text)', marginLeft: 4 }}>(you)</span>}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '11px 12px', textAlign: 'center', fontWeight: 800, color: statusColor }}>{pct.toFixed(1)}%</td>
+                                <td style={{ padding: '11px 12px', textAlign: 'center', color: 'var(--text-h)' }}>{m.subtopics_completed}/{m.subtopics_total}</td>
+                                <td style={{ padding: '11px 12px', textAlign: 'center', color: 'var(--text-h)' }}>{m.topics_completed}/{m.topics_total}</td>
+                                <td style={{ padding: '11px 12px', textAlign: 'center', color: remaining > 0 ? '#ef4444' : '#16a34a', fontWeight: 700 }}>{remaining}</td>
+                                <td style={{ padding: '11px 12px', textAlign: 'center' }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: statusColor + '20', color: statusColor }}>{statusLabel}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  </>
+                )}
+
+                {/* ── Last Activity table ── */}
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>⏱️ Recent Activity</h2>
+                <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden', marginBottom: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px', padding: '9px 18px', background: 'var(--code-bg)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    <div>Member</div><div style={{ textAlign: 'center' }}>Last Active</div><div style={{ textAlign: 'center' }}>Streak</div>
+                  </div>
+                  {(dashboard.members || [])
+                    .slice()
+                    .sort((a, b) => new Date(b.last_activity || 0) - new Date(a.last_activity || 0))
+                    .map((m, i, arr) => {
+                      const lastDate = m.last_activity ? new Date(m.last_activity) : null;
+                      const daysAgo = lastDate ? Math.floor((Date.now() - lastDate) / 86400000) : null;
+                      const streakColor = daysAgo === null ? 'var(--text)' : daysAgo === 0 ? '#16a34a' : daysAgo <= 2 ? '#f59e0b' : '#ef4444';
+                      const streakLabel = daysAgo === null ? 'No activity' : daysAgo === 0 ? 'Today 🔥' : daysAgo === 1 ? 'Yesterday' : `${daysAgo}d ago`;
+                      return (
+                        <div key={m.user_id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px', padding: '12px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', background: m.user_id === user.id ? 'var(--accent-bg)' : 'var(--bg)', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <Avatar name={m.full_name} size={30} />
+                            <span style={{ fontWeight: 600, color: 'var(--text-h)', fontSize: 13 }}>
+                              {m.full_name || 'Unknown'}{m.user_id === user.id && <span style={{ fontSize: 10, color: 'var(--text)', marginLeft: 5 }}>(you)</span>}
+                            </span>
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text)' }}>
+                            {lastDate ? lastDate.toLocaleDateString() : '—'}
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: streakColor }}>
+                            {streakLabel}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </>
             )}
