@@ -2,18 +2,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
+import AppHeader from '../components/AppHeader';
 
 /* ─── Avatar chip ─── */
 function Avatar({ name, size = 24, title }) {
   const initials = (name || '?')[0].toUpperCase();
-  const colors = ['#aa3bff','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+  const colors = ['#22d3ee','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
   const color = colors[(name || '').charCodeAt(0) % colors.length];
   return (
     <span title={title || name} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size, borderRadius: '50%',
-      background: color + '30', border: `2px solid ${color}`,
-      fontSize: size * 0.42, fontWeight: 700, color,
+      background: color + '25', border: `2px solid ${color}60`,
+      fontSize: size * 0.42, fontWeight: 600, color,
       flexShrink: 0, cursor: 'default',
     }}>{initials}</span>
   );
@@ -22,19 +23,19 @@ function Avatar({ name, size = 24, title }) {
 /* ─── Badge ─── */
 function Badge({ children, color }) {
   const map = {
-    owner:    { bg: 'rgba(170,59,255,0.15)', text: 'var(--accent)' },
-    member:   { bg: 'rgba(100,100,120,0.12)', text: 'var(--text)' },
-    pending:  { bg: 'rgba(234,179,8,0.15)',   text: '#ca8a04' },
-    accepted: { bg: 'rgba(34,197,94,0.15)',   text: '#16a34a' },
-    declined: { bg: 'rgba(239,68,68,0.15)',   text: '#dc2626' },
-    pdf:      { bg: 'rgba(239,68,68,0.12)',   text: '#dc2626' },
-    image:    { bg: 'rgba(59,130,246,0.12)',  text: '#3b82f6' },
+    owner:    { bg: 'var(--accent-dim)', text: 'var(--accent)' },
+    member:   { bg: 'var(--bg-hover)', text: 'var(--text)' },
+    pending:  { bg: 'rgba(234,179,8,0.12)', text: 'var(--warning)' },
+    accepted: { bg: 'var(--success-dim)', text: 'var(--success)' },
+    declined: { bg: 'var(--danger-dim)', text: 'var(--danger)' },
+    pdf:      { bg: 'var(--danger-dim)', text: 'var(--danger)' },
+    image:    { bg: 'rgba(59,130,246,0.12)', text: '#3b82f6' },
   };
   const c = map[color] || map.member;
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
-      padding: '2px 8px', borderRadius: 99, background: c.bg, color: c.text,
+      fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '3px 9px', borderRadius: 6, background: c.bg, color: c.text,
     }}>{children}</span>
   );
 }
@@ -47,11 +48,11 @@ function Toast({ msg, type, onClose }) {
   return (
     <div style={{
       position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-      padding: '12px 20px', borderRadius: 10, maxWidth: 320,
-      background: isErr ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
-      color: isErr ? '#dc2626' : '#16a34a',
-      border: `1px solid ${isErr ? '#dc2626' : '#16a34a'}`,
-      fontWeight: 500, boxShadow: 'var(--shadow)', fontSize: 14,
+      padding: '14px 20px', borderRadius: 'var(--radius)', maxWidth: 340,
+      background: isErr ? 'var(--danger-dim)' : 'var(--success-dim)',
+      color: isErr ? 'var(--danger)' : 'var(--success)',
+      border: `1px solid ${isErr ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'}`,
+      fontWeight: 500, boxShadow: 'var(--shadow-lg)', fontSize: 14,
     }}>{msg}</div>
   );
 }
@@ -70,11 +71,11 @@ function InlineForm({ placeholder, onSave, onCancel }) {
   return (
     <form onSubmit={submit} style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
       <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder}
-        style={{ flex: 1, padding: '7px 12px', borderRadius: 7, border: '1.5px solid var(--accent-border)', background: 'var(--code-bg)', color: 'var(--text-h)', outline: 'none' }} />
-      <button type="submit" disabled={saving} style={{ padding: '7px 16px', borderRadius: 7, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+        style={{ flex: 1, padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-h)' }} />
+      <button type="submit" disabled={saving} style={{ padding: '8px 16px', borderRadius: 'var(--radius)', background: 'var(--accent)', color: 'var(--bg)', border: 'none', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
         {saving ? '…' : 'Save'}
       </button>
-      <button type="button" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 7, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>
+      <button type="button" onClick={onCancel} style={{ padding: '8px 14px', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}>
         Cancel
       </button>
     </form>
@@ -85,9 +86,9 @@ function InlineForm({ placeholder, onSave, onCancel }) {
 function IconBtn({ onClick, title, danger, children }) {
   return (
     <button type="button" title={title} onClick={onClick}
-      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 5, color: danger ? '#dc2626' : 'var(--text)', fontSize: 13, opacity: 0.65, transition: 'all 0.15s' }}
-      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = danger ? 'rgba(239,68,68,0.1)' : 'var(--code-bg)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.65'; e.currentTarget.style.background = 'transparent'; }}
+      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)', color: danger ? 'var(--danger)' : 'var(--text)', fontSize: 13, opacity: 0.7, transition: 'all 0.15s' }}
+      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = danger ? 'var(--danger-dim)' : 'var(--bg-hover)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.background = 'transparent'; }}
     >{children}</button>
   );
 }
@@ -164,6 +165,57 @@ function DashboardSkeleton() {
   );
 }
 
+/* ─── Notes tab skeleton ─── */
+function NotesSkeleton() {
+  return (
+    <div>
+      <Skeleton w={140} h={20} r={6} style={{ marginBottom: 20 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {[1, 2, 3].map((i) => (
+          <div key={i}>
+            <Skeleton w={180} h={36} r={8} style={{ marginBottom: 12 }} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+              {[1, 2].map((j) => (
+                <div key={j} style={{ borderRadius: 12, border: '1px solid var(--border)', padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <Skeleton w={32} h={32} r={16} />
+                    <div style={{ flex: 1 }}>
+                      <Skeleton w="70%" h={14} r={4} style={{ marginBottom: 6 }} />
+                      <Skeleton w="40%" h={10} r={4} />
+                    </div>
+                  </div>
+                  <Skeleton w={60} h={20} r={6} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Members tab skeleton ─── */
+function MembersSkeleton() {
+  return (
+    <div>
+      <Skeleton w={120} h={18} r={6} style={{ marginBottom: 16 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 12, border: '1px solid var(--border)' }}>
+            <Skeleton w={40} h={40} r={20} />
+            <div style={{ flex: 1 }}>
+              <Skeleton w="40%" h={14} r={4} style={{ marginBottom: 6 }} />
+              <Skeleton w="30%" h={10} r={4} />
+            </div>
+            <Skeleton w={52} h={20} r={10} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── GitHub-style contribution graph ─── */
 function ContributionGraph({ timeline, members: memberList, memberMap }) {
   const TODAY = new Date();
@@ -200,10 +252,10 @@ function ContributionGraph({ timeline, members: memberList, memberMap }) {
   function getColor(count) {
     if (!count) return 'var(--border)';
     const intensity = count / maxVal;
-    if (intensity < 0.25) return 'rgba(170,59,255,0.25)';
-    if (intensity < 0.5)  return 'rgba(170,59,255,0.5)';
-    if (intensity < 0.75) return 'rgba(170,59,255,0.75)';
-    return 'rgba(170,59,255,1)';
+    if (intensity < 0.25) return 'rgba(34,211,238,0.25)';
+    if (intensity < 0.5)  return 'rgba(34,211,238,0.5)';
+    if (intensity < 0.75) return 'rgba(34,211,238,0.75)';
+    return 'var(--accent)';
   }
 
   // Build grid: columns = weeks (oldest left), rows = days (Sun→Sat)
@@ -241,7 +293,7 @@ function ContributionGraph({ timeline, members: memberList, memberMap }) {
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-h)' }}>📅 Activity Heatmap</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text)' }}>
           <span>Less</span>
-          {['var(--border)','rgba(170,59,255,0.25)','rgba(170,59,255,0.5)','rgba(170,59,255,0.75)','rgba(170,59,255,1)'].map((c,i) => (
+          {['var(--border)','rgba(34,211,238,0.25)','rgba(34,211,238,0.5)','rgba(34,211,238,0.75)','var(--accent)'].map((c,i) => (
             <div key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,0.1)' }} />
           ))}
           <span>More</span>
@@ -397,6 +449,11 @@ export default function ProjectDetail() {
   const [syllabusMode, setSyllabusMode]   = useState('ui');
   const [mdText, setMdText]               = useState('');
   const [mdSaving, setMdSaving]           = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [togglingSubtopicId, setTogglingSubtopicId] = useState(null);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   // inline add state
   const [showAddTopic, setShowAddTopic]     = useState(false);
@@ -411,11 +468,6 @@ export default function ProjectDetail() {
   const [inviting, setInviting]       = useState(false);
   const [inviteErr, setInviteErr]     = useState('');
 
-  // delete project
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteErr, setDeleteErr] = useState('');
-
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -426,7 +478,15 @@ export default function ProjectDetail() {
   const loadTopics   = useCallback(() => api.get(`/projects/${projectId}/topics`).then((r) => setTopics(r.data || [])).catch(() => {}), [projectId]);
   const loadProgress = useCallback(() => api.get(`/projects/${projectId}/progress`).then((r) => setProgress(r)).catch(() => {}), [projectId]);
   const loadMembers  = useCallback(() => api.get(`/projects/${projectId}/members`).then((r) => setMembers(r.data || [])).catch(() => {}), [projectId]);
-  const loadInvites  = useCallback(() => api.get(`/projects/${projectId}/invites`).then((r) => setInvites(r.data || [])).catch(() => {}), [projectId]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const loadInvites  = useCallback(async () => {
+    setInviteLoading(true);
+    try {
+      const r = await api.get(`/projects/${projectId}/invites`);
+      setInvites(r.data || []);
+    } catch (_) { setInvites([]); }
+    finally { setInviteLoading(false); }
+  }, [projectId]);
   const loadDashboard = useCallback(() => {
     setDashboardLoading(true);
     return api.get(`/projects/${projectId}/dashboard`)
@@ -435,12 +495,13 @@ export default function ProjectDetail() {
       .finally(() => setDashboardLoading(false));
   }, [projectId]);
 
-  // Single request replaces N parallel per-topic calls (Issue P fix)
   const loadAllNotes = useCallback(async () => {
+    setNotesLoading(true);
     try {
       const r = await api.get(`/projects/${projectId}/completions/all`);
       setAllNotes(r.data || {});
     } catch (_) { setAllNotes({}); }
+    finally { setNotesLoading(false); }
   }, [projectId]);
 
   useEffect(() => {
@@ -525,13 +586,14 @@ export default function ProjectDetail() {
     } finally { setMdSaving(false); }
   }
 
-  /* ─── progress toggle ─── */
   async function toggleComplete(subtopicId, isCompleted) {
+    setTogglingSubtopicId(subtopicId);
     try {
       if (isCompleted) await api.delete(`/projects/${projectId}/subtopics/${subtopicId}/complete`);
       else await api.post(`/projects/${projectId}/subtopics/${subtopicId}/complete`);
       await loadProgress();
     } catch (e) { showToast(e.error?.message || 'Could not update progress', 'error'); }
+    finally { setTogglingSubtopicId(null); }
   }
 
   /* ─── notes upload ─── */
@@ -546,14 +608,31 @@ export default function ProjectDetail() {
     if (!file || !uploadingFor) return;
     const form = new FormData();
     form.append('file', file);
+    setUploadProgress(0);
     try {
-      await api.post(`/projects/${projectId}/topics/${uploadingFor}/complete`, form);
+      const r = await api.uploadWithProgress(`/projects/${projectId}/topics/${uploadingFor}/complete`, form, (pct) => setUploadProgress(pct));
       await loadProgress();
       if (tab === 'notes') await loadAllNotes();
       showToast('Notes uploaded! Topic completed 🎉');
     } catch (e) {
-      showToast(e.error?.message || 'Upload failed', 'error');
-    } finally { setUploadingFor(null); }
+      showToast(e.error?.message || e.response?.data?.error?.message || 'Upload failed', 'error');
+    } finally {
+      setUploadingFor(null);
+      setUploadProgress(null);
+    }
+  }
+
+  async function handleDeleteProject() {
+    setDeletingProject(true);
+    try {
+      await api.delete(`/projects/${projectId}`);
+      showToast('Project deleted');
+      navigate('/projects');
+    } catch (e) {
+      showToast(e.error?.message || e.message || 'Failed to delete project', 'error');
+      setDeletingProject(false);
+      setShowDeleteModal(false);
+    }
   }
 
   /* ─── invite actions ─── */
@@ -574,27 +653,12 @@ export default function ProjectDetail() {
     catch (e) { showToast(e.error?.message || 'Failed', 'error'); }
   }
 
-  async function handleDeleteProject() {
-    setDeleteErr('');
-    setDeleting(true);
-    try {
-      await api.delete(`/projects/${projectId}`);
-      showToast('Project deleted.');
-      navigate('/projects');
-    } catch (e) {
-      setDeleteErr(e.error?.message || 'Failed to delete project');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   /* ─── guards ─── */
   if (!user) { navigate('/login'); return null; }
   if (loading) return (
     <div style={{ minHeight: '100svh', background: 'var(--bg)' }}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-      {/* header skeleton */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Skeleton w={24} h={24} r={6} />
           <Skeleton w={140} h={18} r={6} />
@@ -602,7 +666,7 @@ export default function ProjectDetail() {
         <Skeleton w={80} h={32} r={7} />
       </div>
       {/* tabs skeleton */}
-      <div style={{ display: 'flex', gap: 8, padding: '10px 24px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 8, padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
         {[80, 80, 60, 90].map((w, i) => <Skeleton key={i} w={w} h={30} r={99} />)}
       </div>
       {/* content skeleton */}
@@ -621,8 +685,11 @@ export default function ProjectDetail() {
     </div>
   );
   if (!project) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text)' }}>
-      Project not found or you don't have access. <Link to="/projects">← Back</Link>
+    <div style={{ minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+      <div style={{ textAlign: 'center', padding: 48 }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>Project not found or you don't have access.</p>
+        <Link to="/projects" style={{ color: 'var(--accent)', fontWeight: 500 }}>← Back to Projects</Link>
+      </div>
     </div>
   );
 
@@ -634,36 +701,53 @@ export default function ProjectDetail() {
       {/* ── hidden file input ── */}
       <input ref={fileInputRef} type="file" accept=".pdf,image/jpeg,image/png" style={{ display: 'none' }} onChange={handleFileSelected} />
 
-      {/* ── header ── */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to="/projects" style={{ color: 'var(--text)', fontSize: 20 }}>←</Link>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, color: 'var(--text-h)', fontSize: 16 }}>{project.title}</div>
-            {project.description && <div style={{ fontSize: 12, color: 'var(--text)' }}>{project.description}</div>}
-          </div>
-          {isOwner && <Badge color="owner">Owner</Badge>}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: 'var(--text)' }}>{user.full_name || user.email}</span>
-          <button type="button" onClick={() => logout().then(() => navigate('/'))}
-            style={{ padding: '6px 14px', borderRadius: 7, fontSize: 13, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>
-            Logout
-          </button>
-        </div>
-      </header>
+      <AppHeader
+        user={user}
+        variant="project"
+        projectTitle={project.title}
+        projectDescription={project.description}
+        badge={isOwner && <Badge color="owner">Owner</Badge>}
+        onDeleteProject={isOwner ? () => setShowDeleteModal(true) : undefined}
+        onLogout={() => logout().then(() => navigate('/'))}
+      />
 
-      {/* ── tabs ── */}
-      <nav style={{ display: 'flex', gap: 4, padding: '10px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+      {showDeleteModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: 28, maxWidth: 400, width: '100%', boxShadow: 'var(--shadow-lg)',
+          }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600, color: 'var(--text-h)' }}>Delete project?</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text)', lineHeight: 1.55 }}>
+              Permanently delete <strong>"{project.title}"</strong>? This will remove all topics, subtopics, members, invites, and uploaded notes. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => !deletingProject && setShowDeleteModal(false)}
+                disabled={deletingProject}
+                style={{ padding: '9px 20px', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 500 }}>
+                Cancel
+              </button>
+              <button type="button" onClick={handleDeleteProject} disabled={deletingProject}
+                style={{ padding: '9px 20px', borderRadius: 'var(--radius)', background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 600, opacity: deletingProject ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {deletingProject && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
+                {deletingProject ? 'Deleting…' : 'Delete project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav className="dashboard-tabs" style={{ display: 'flex', gap: 4, padding: '12px clamp(12px, 3vw, 24px)', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
         {tabs.map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)}
-            style={{ padding: '6px 18px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', textTransform: 'capitalize', background: tab === t ? 'var(--accent-bg)' : 'transparent', color: tab === t ? 'var(--accent)' : 'var(--text)', transition: 'all 0.18s' }}>
+            style={{ padding: '8px 18px', borderRadius: 'var(--radius)', fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', textTransform: 'capitalize', background: tab === t ? 'var(--accent-dim)' : 'transparent', color: tab === t ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' }}>
             {t}
           </button>
         ))}
       </nav>
 
-      <main style={{ padding: '28px 24px', flex: 1, textAlign: 'left', maxWidth: 800, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <main style={{ padding: 'clamp(16px, 4vw, 32px) clamp(12px, 4vw, 24px)', flex: 1, textAlign: 'left', maxWidth: 860, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
         {/* ════════ SYLLABUS TAB ════════ */}
         {tab === 'syllabus' && (
@@ -740,9 +824,16 @@ export default function ProjectDetail() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {/* upload notes button */}
                           {allMyDone && !alreadyCompleted && (
-                            <button type="button" onClick={() => triggerUpload(topic.id)}
-                              style={{ padding: '5px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              📎 Upload Notes
+                            <button type="button" onClick={() => triggerUpload(topic.id)} disabled={uploadingFor === topic.id}
+                              style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', cursor: uploadingFor === topic.id ? 'wait' : 'pointer', opacity: uploadingFor === topic.id ? 0.9 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {uploadingFor === topic.id ? (
+                                <>
+                                  <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                  {uploadProgress != null ? `Uploading ${uploadProgress}%` : 'Uploading…'}
+                                </>
+                              ) : (
+                                <>📎 Upload Notes</>
+                              )}
                             </button>
                           )}
                           {alreadyCompleted && (
@@ -767,10 +858,12 @@ export default function ProjectDetail() {
                             <div key={st.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                                 {/* my checkbox */}
-                                <button type="button" onClick={() => toggleComplete(st.id, myDone)}
+                                <button type="button" onClick={() => toggleComplete(st.id, myDone)} disabled={togglingSubtopicId === st.id}
                                   title={myDone ? 'Mark incomplete' : 'Mark complete'}
-                                  style={{ width: 22, height: 22, borderRadius: 5, border: 'none', flexShrink: 0, background: myDone ? 'var(--accent)' : 'transparent', border: myDone ? 'none' : '2px solid var(--border)', color: '#fff', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' }}>
-                                  {myDone ? '✓' : ''}
+                                  style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, background: togglingSubtopicId === st.id ? 'var(--bg-hover)' : myDone ? 'var(--accent)' : 'transparent', border: togglingSubtopicId === st.id || !myDone ? '2px solid var(--border)' : 'none', color: '#fff', cursor: togglingSubtopicId === st.id ? 'wait' : 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' }}>
+                                  {togglingSubtopicId === st.id ? (
+                                    <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                  ) : myDone ? '✓' : ''}
                                 </button>
                                 <span style={{ fontSize: 14, color: 'var(--text-h)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {st.title}
@@ -832,7 +925,7 @@ export default function ProjectDetail() {
                 <form onSubmit={sendInvite} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <input type="email" value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setInviteErr(''); }}
                     placeholder="teammate@email.com" required
-                    style={{ flex: '1 1 220px', padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${inviteErr ? '#dc2626' : 'var(--border)'}`, background: 'var(--code-bg)', color: 'var(--text-h)', outline: 'none', fontSize: 14 }} />
+                    style={{ flex: '1 1 220px', padding: '9px 14px', borderRadius: 'var(--radius)', border: `1px solid ${inviteErr ? 'var(--danger)' : 'var(--border)'}`, background: 'var(--bg-elevated)', color: 'var(--text-h)', outline: 'none', fontSize: 14 }} />
                   <button type="submit" disabled={inviting}
                     style={{ padding: '9px 22px', borderRadius: 8, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', cursor: inviting ? 'not-allowed' : 'pointer', opacity: inviting ? 0.7 : 1, fontSize: 14 }}>
                     {inviting ? 'Sending…' : 'Send Invite'}
@@ -864,9 +957,21 @@ export default function ProjectDetail() {
 
             {isOwner && (
               <section>
-                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>Invites {invites.length > 0 && `(${invites.length})`}</h2>
-                {invites.length === 0 ? (
-                  <div style={{ padding: 24, borderRadius: 12, textAlign: 'center', border: '1px dashed var(--border)', color: 'var(--text)', opacity: 0.6, fontSize: 14 }}>No invites sent yet.</div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>Invites {!inviteLoading && invites.length > 0 && `(${invites.length})`}</h2>
+                {inviteLoading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[1,2,3].map(i => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 12, border: '1px solid var(--border)' }}>
+                        <Skeleton w={40} h={40} r={20} />
+                        <div style={{ flex: 1 }}>
+                          <Skeleton w="50%" h={14} r={4} style={{ marginBottom: 6 }} />
+                          <Skeleton w="35%" h={10} r={4} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : invites.length === 0 ? (
+                  <div style={{ padding: 24, borderRadius: 12, textAlign: 'center', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 14 }}>No invites sent yet.</div>
                 ) : (
                   <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
                     {invites.map((inv, i) => (
@@ -893,8 +998,8 @@ export default function ProjectDetail() {
                 <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text)', opacity: 0.9 }}>
                   Permanently delete this project, all topics, subtopics, members, invites, and uploaded notes. This cannot be undone.
                 </p>
-                <button type="button" onClick={() => { setShowDeleteModal(true); setDeleteErr(''); }}
-                  style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'transparent', border: '1px solid #dc2626', color: '#dc2626', cursor: 'pointer' }}>
+                <button type="button" onClick={() => setShowDeleteModal(true)}
+                  style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', cursor: 'pointer' }}>
                   Delete Project
                 </button>
               </section>
@@ -906,7 +1011,12 @@ export default function ProjectDetail() {
         {tab === 'notes' && (
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 20px', color: 'var(--text-h)' }}>Study Notes</h2>
-            {topics.length === 0 && <p style={{ color: 'var(--text)', opacity: 0.6 }}>No topics in this project yet.</p>}
+            {notesLoading ? (
+              <NotesSkeleton />
+            ) : topics.length === 0 ? (
+              <p style={{ color: 'var(--text)', opacity: 0.6 }}>No topics in this project yet.</p>
+            ) : (
+            <>
             {topics.map((topic) => {
               const notes = allNotes[topic.id] || [];
               if (notes.length === 0) return null;
@@ -940,10 +1050,12 @@ export default function ProjectDetail() {
                 </div>
               );
             })}
-            {topics.every((t) => !(allNotes[t.id] || []).length) && topics.length > 0 && (
-              <div style={{ padding: 40, textAlign: 'center', borderRadius: 12, border: '2px dashed var(--border)', color: 'var(--text)', opacity: 0.6 }}>
+            {topics.every((t) => !(allNotes[t.id] || []).length) && (
+              <div style={{ padding: 40, textAlign: 'center', borderRadius: 12, border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
                 No notes uploaded yet. Complete all subtopics in a topic to unlock the upload button.
               </div>
+            )}
+            </>
             )}
           </div>
         )}
@@ -970,7 +1082,7 @@ export default function ProjectDetail() {
                     { label: 'Topics', value: dashboard.project?.total_topics ?? 0, icon: '📖', color: '#3b82f6' },
                     { label: 'Subtopics', value: dashboard.project?.total_subtopics ?? 0, icon: '📝', color: '#10b981' },
                     { label: 'Members', value: (dashboard.members || []).length, icon: '👥', color: '#f59e0b' },
-                    { label: 'Completions', value: (dashboard.members || []).reduce((s, m) => s + m.subtopics_completed, 0), icon: '✅', color: '#aa3bff' },
+                    { label: 'Completions', value: (dashboard.members || []).reduce((s, m) => s + m.subtopics_completed, 0), icon: '✅', color: 'var(--accent)' },
                   ].map((card) => (
                     <div key={card.label} style={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', padding: '18px 14px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                       <div style={{ fontSize: 26 }}>{card.icon}</div>
@@ -986,7 +1098,7 @@ export default function ProjectDetail() {
                     <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text-h)' }}>📊 Completion Overview</h2>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 28 }}>
                       {(dashboard.members || []).map((m, i) => {
-                        const ringColors = ['#aa3bff','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+                        const ringColors = ['var(--accent)','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6'];
                         return (
                           <RingChart
                             key={m.user_id}
@@ -1005,7 +1117,7 @@ export default function ProjectDetail() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 28 }}>
                   <BarChart
                     title="📝 Subtopics Completed per Member"
-                    color="#aa3bff"
+                    color="var(--accent)"
                     data={(dashboard.members || []).map(m => ({
                       label: m.full_name?.split(' ')[0] || 'User',
                       value: m.subtopics_completed,
@@ -1152,38 +1264,6 @@ export default function ProjectDetail() {
           </div>
         )}
       </main>
-
-      {/* Delete project confirmation modal */}
-      {showDeleteModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)', padding: 24, boxSizing: 'border-box',
-        }} onClick={() => !deleting && setShowDeleteModal(false)}>
-          <div style={{
-            background: 'var(--bg)', borderRadius: 14, border: '1px solid var(--border)', padding: 28, maxWidth: 420, width: '100%',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: 'var(--text-h)' }}>
-              Delete &quot;{project?.title || 'Project'}&quot;?
-            </h3>
-            <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
-              This will permanently remove the project, all topics, subtopics, members, invites, and uploaded notes. This cannot be undone.
-            </p>
-            {deleteErr && <p style={{ margin: '0 0 16px', color: '#dc2626', fontSize: 13 }}>⚠ {deleteErr}</p>}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => !deleting && setShowDeleteModal(false)}
-                style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: deleting ? 'not-allowed' : 'pointer' }}>
-                Cancel
-              </button>
-              <button type="button" onClick={handleDeleteProject} disabled={deleting}
-                style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#dc2626', border: 'none', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {deleting && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
-                {deleting ? 'Deleting…' : 'Delete Project'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: '', type: 'success' })} />
     </div>

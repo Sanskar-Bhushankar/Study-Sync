@@ -8,12 +8,13 @@ import './index.css';
 
 const Projects = lazy(() => import('./pages/Projects'));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const Profile = lazy(() => import('./pages/Profile'));
 const Invitations = lazy(() => import('./pages/Invitations'));
 
 function PageFallback() {
   return (
-    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)' }}>
-      <span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block', width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
+    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+      <span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block', width: 28, height: 28, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%' }} />
     </div>
   );
 }
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="/register" element={<Register />} />
         <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
         <Route path="/projects/:projectId" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/invitations" element={<PrivateRoute><Invitations /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -365,4 +365,131 @@ await Promise.all((list || []).map(async (t) => {
 
 ---
 
-*Document version: 1.2 — All critical and high-priority fixes implemented.*
+## 7. Remaining Bottlenecks (v1.3 Targets)
+
+### 7.1 Backend — Network & Database
+
+#### Issue V: `getById` project fetches owner profile separately
+
+**Location:** `project.service.js — getById`
+
+```javascript
+const { data } = await supabase.from('projects').select(...).eq('id', projectId).single();
+const { data: owner } = await supabase.from('profiles').select('full_name').eq('id', data.created_by).single();
+```
+
+**Impact:** 2 sequential DB queries every time a project page is opened. Fix: use Supabase join `profiles!created_by(full_name)` in the original select.
+
+**Fix:**
+```javascript
+const { data, error } = await supabase
+  .from('projects')
+  .select('id, title, description, created_by, created_at, profiles!created_by(full_name)')
+  .eq('id', projectId).single();
+return { ...data, owner: data.profiles?.full_name };
+```
+
+---
+
+#### Issue W: No database indexes on hot filter columns
+
+**Hot queries:**
+- `subtopic_progress WHERE project_id = ? AND is_completed = true`
+- `topic_completions WHERE project_id = ?`
+- `topics WHERE project_id = ? ORDER BY order_index`
+- `subtopics WHERE topic_id IN (...) ORDER BY order_index`
+
+**Impact:** Without indexes Supabase does a full table scan. As data grows this degrades linearly.
+
+**Fix — Run once in Supabase SQL editor:**
+```sql
+CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_subtopics_topic ON subtopics(topic_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_subtopic_progress_project ON subtopic_progress(project_id, is_completed);
+CREATE INDEX IF NOT EXISTS idx_topic_completions_project ON topic_completions(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+```
+
+---
+
+#### Issue X: Dashboard does full recompute on every tab click
+
+**Location:** `dashboard.service.js` — 5s in-process cache is per Node process restart, resets on first tab open after 5s.
+
+**Better fix:** Cache by projectId with a 30s TTL (enough for dashboard to feel instant on repeated tab switches within a session).
+
+**Fix:**
+```javascript
+// Change TTL from 5000 to 30000 in _getCached
+if (entry && Date.now() - entry.ts < 30000) return entry.promise;
+```
+
+---
+
+#### Issue Y: `progress.service.js` calls `listByProject` which is still 2 queries
+
+**Location:** `progress.service.js — getProgressMatrix` → `topicService.listByProject()`
+
+**Status:** listByProject was fixed to 2 queries. But `getProgressMatrix` then runs additional `subtopic_progress` queries. No further issue here — this path is already optimal.
+
+---
+
+### 7.2 Frontend — Rendering & UX
+
+#### Issue Z: Projects page has no optimistic UI on create
+
+**Location:** `Projects.jsx — createProject`
+
+**Current:** Waits for full `POST /projects` round-trip before the new project card appears. On slow connections the user sees nothing for 500ms+.
+
+**Fix:** Insert a temporary card immediately with `setList((prev) => [{ ...tempProject, id: 'temp' }, ...prev])` then replace with real data on response.
+
+---
+
+#### Issue AA: ProjectDetail re-fetches all 4 endpoints on every mount (no client cache)
+
+**Location:** `ProjectDetail.jsx — useEffect` on mount
+
+**Current:** Every navigation to a project page fires 4 parallel requests even if data was loaded 10 seconds ago.
+
+**Fix options:**
+- **Simple:** Store last-loaded data in a module-level `Map` keyed by `projectId`; serve stale data immediately, re-fetch in background (stale-while-revalidate).
+- **Proper:** Add `react-query` or `swr` — both handle caching, deduplication, and background refetch out of the box.
+
+---
+
+#### Issue BB: No preloading on project card hover
+
+**Location:** `Projects.jsx — project card Link`
+
+**Current:** Bundle for `ProjectDetail` is lazy-loaded only when the user navigates. First visit to any project has a JS parse delay.
+
+**Fix:** On `onMouseEnter` of the card, trigger `import('./ProjectDetail')` to start loading the chunk during the ~200ms hover before the click.
+
+---
+
+#### Issue CC: Auth init still blocks the whole app render
+
+**Location:** `AuthContext.jsx — useEffect` / `PrivateRoute`
+
+**Current:** App shows a loading spinner until the refresh token round-trip completes (~300–800ms on local, more on deployed backend). Every cold load has this cost.
+
+**Fix:** Read the cached user from `localStorage` synchronously during context initialization and render protected routes immediately. Silently validate the token in the background and logout only if the refresh actually fails.
+
+---
+
+### 7.3 Recommended Order for v1.3
+
+| Priority | Fix | Effort | Impact |
+|----------|-----|--------|--------|
+| 🔴 High | **Database indexes (Issue W)** | 5 min (SQL) | Huge on growing data |
+| 🔴 High | **Auth optimistic render (Issue CC)** | Medium | Eliminates full-app loading screen |
+| 🟡 Medium | **Dashboard TTL 30s (Issue X)** | 1 line | Dashboard tab feels instant |
+| 🟡 Medium | **`getById` join (Issue V)** | Low | Saves 1 DB round-trip per project load |
+| 🟡 Medium | **Hover preload (Issue BB)** | Low | Faster first-project-open |
+| 🟢 Low | **Optimistic create (Issue Z)** | Low | Projects page feels snappier |
+| 🟢 Low | **Client-side cache (Issue AA)** | Medium | Eliminates re-fetches on back-navigation |
+
+---
+
+*Document version: 1.3 — Remaining bottlenecks identified after v1.2 fixes.*

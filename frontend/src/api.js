@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const RT_KEY = 'ss_rt';
@@ -35,7 +37,7 @@ async function doRefresh() {
       const r = await fetch(`${BASE}/api/v1/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json','ngrok-skip-browser-warning': 'true' },
         body,
       });
       const d = await r.json().catch(() => ({}));
@@ -57,9 +59,20 @@ async function doRefresh() {
 
 async function request(path, opts = {}, isRetry = false) {
   const url = path.startsWith('http') ? path : `${BASE}/api/v1${path}`;
+  // const headers = { ...opts.headers };
+  // if (accessToken && !headers.Authorization) headers.Authorization = `Bearer ${accessToken}`;
+  // if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const headers = { ...opts.headers };
-  if (accessToken && !headers.Authorization) headers.Authorization = `Bearer ${accessToken}`;
-  if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+
+headers['ngrok-skip-browser-warning'] = 'true';
+
+if (accessToken && !headers.Authorization) {
+  headers.Authorization = `Bearer ${accessToken}`;
+}
+
+if (!(opts.body instanceof FormData)) {
+  headers['Content-Type'] = 'application/json';
+}
   const res = await fetch(url, { ...opts, credentials: 'include', headers });
   if (res.status === 401 && !isRetry) {
     try {
@@ -74,11 +87,29 @@ async function request(path, opts = {}, isRetry = false) {
   return data;
 }
 
+/** Upload with progress. Uses axios for onUploadProgress. */
+async function uploadWithProgress(path, formData, onProgress) {
+  const url = path.startsWith('http') ? path : `${BASE}/api/v1${path}`;
+  const headers = { 'ngrok-skip-browser-warning': 'true' };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const { data } = await axios.post(url, formData, {
+    headers,
+    withCredentials: true,
+    onUploadProgress: (e) => {
+      if (e.total && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    },
+  });
+  return data;
+}
+
 export const api = {
   get:    (path)       => request(path),
   post:   (path, body) => request(path, { method: 'POST',  body: body instanceof FormData ? body : JSON.stringify(body) }),
   patch:  (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path)       => request(path, { method: 'DELETE' }),
+  uploadWithProgress,
 };
 
 export { saveRefreshToken, loadRefreshToken };

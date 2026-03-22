@@ -2,23 +2,22 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
+import AppHeader from '../components/AppHeader';
 
-/* ─── Avatar ─── */
 function Avatar({ name, size = 36 }) {
   const i = (name || '?')[0].toUpperCase();
-  const COLORS = ['#aa3bff','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+  const COLORS = ['#22d3ee', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
   const c = COLORS[(name || '').charCodeAt(0) % COLORS.length];
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size, borderRadius: '50%',
-      background: c + '25', border: `2px solid ${c}`,
-      fontSize: size * 0.42, fontWeight: 700, color: c, flexShrink: 0,
+      background: c + '20', border: `2px solid ${c}60`,
+      fontSize: size * 0.42, fontWeight: 600, color: c, flexShrink: 0,
     }}>{i}</span>
   );
 }
 
-/* ─── Toast ─── */
 function Toast({ msg, type, onClose }) {
   useEffect(() => { if (msg) { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); } }, [msg, onClose]);
   if (!msg) return null;
@@ -26,11 +25,11 @@ function Toast({ msg, type, onClose }) {
   return (
     <div style={{
       position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-      padding: '12px 20px', borderRadius: 10, maxWidth: 320,
-      background: isErr ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
-      color: isErr ? '#dc2626' : '#16a34a',
-      border: `1px solid ${isErr ? '#dc2626' : '#16a34a'}`,
-      fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', fontSize: 14,
+      padding: '14px 20px', borderRadius: 'var(--radius)', maxWidth: 340,
+      background: isErr ? 'var(--danger-dim)' : 'var(--success-dim)',
+      color: isErr ? 'var(--danger)' : 'var(--success)',
+      border: `1px solid ${isErr ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)'}`,
+      fontWeight: 500, boxShadow: 'var(--shadow-lg)', fontSize: 14,
     }}>{msg}</div>
   );
 }
@@ -40,7 +39,7 @@ export default function Invitations() {
   const navigate = useNavigate();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [actingOn, setActingOn] = useState(null); // inviteId being handled
+  const [actingOn, setActingOn] = useState(null);
   const [toast, setToast] = useState({ msg: '', type: 'success' });
 
   const showToast = (msg, type = 'success') => setToast({ msg, type });
@@ -63,7 +62,6 @@ export default function Invitations() {
     try {
       await api.post(`/invites/${inv.id}/accept`);
       showToast(`Joined "${inv.projects?.title || 'project'}" 🎉`);
-      // redirect after short delay so user sees the toast
       setTimeout(() => navigate(`/projects/${inv.project_id}`), 1200);
     } catch (e) {
       showToast(e.error?.message || 'Failed to accept', 'error');
@@ -89,94 +87,76 @@ export default function Invitations() {
 
   return (
     <div style={{ minHeight: '100svh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      {/* ── header ── */}
-      <header style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '14px 28px', borderBottom: '1px solid var(--border)',
-        background: 'var(--bg)', position: 'sticky', top: 0, zIndex: 100,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Link to="/projects" style={{ color: 'var(--text)', fontSize: 20, lineHeight: 1 }}>←</Link>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-h)' }}>My Invitations</h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 13, color: 'var(--text)' }}>{user.full_name || user.email}</span>
-          <button type="button"
-            onClick={() => logout().then(() => navigate('/'))}
-            style={{ padding: '6px 14px', borderRadius: 7, fontSize: 13, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>
-            Logout
-          </button>
-        </div>
-      </header>
+      <AppHeader user={user} variant="invitations" onLogout={() => logout().then(() => navigate('/'))} />
 
-      <main style={{ flex: 1, maxWidth: 640, width: '100%', margin: '0 auto', padding: '36px 24px', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, maxWidth: 640, width: '100%', margin: '0 auto', padding: 'clamp(16px, 4vw, 40px) clamp(12px, 4vw, 28px)', boxSizing: 'border-box' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--text)', opacity: 0.5 }}>Checking invitations…</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ width: 180, height: 16, borderRadius: 6, background: 'linear-gradient(90deg, var(--border) 25%, var(--bg-elevated) 50%, var(--border) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite' }} />
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 18 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 'var(--radius)', background: 'var(--bg-elevated)' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ width: '60%', height: 16, borderRadius: 6, background: 'linear-gradient(90deg, var(--border) 25%, var(--bg-elevated) 50%, var(--border) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite', marginBottom: 8 }} />
+                  <div style={{ width: '40%', height: 12, borderRadius: 4, background: 'linear-gradient(90deg, var(--border) 25%, var(--bg-elevated) 50%, var(--border) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite' }} />
+                </div>
+                <div style={{ width: 90, height: 36, borderRadius: 'var(--radius)', background: 'var(--bg-elevated)' }} />
+              </div>
+            ))}
+          </div>
         ) : invites.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, borderRadius: 16, border: '2px dashed var(--border)' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
-            <h2 style={{ margin: '0 0 8px', color: 'var(--text-h)', fontWeight: 700 }}>No pending invitations</h2>
-            <p style={{ margin: 0, color: 'var(--text)', fontSize: 14 }}>
+          <div style={{ textAlign: 'center', padding: 64, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--border)', background: 'var(--bg-card)' }}>
+            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.8 }}>📭</div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600 }}>No pending invitations</h2>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
               When someone invites you to a project, it will appear here.
             </p>
             <Link to="/projects" style={{
-              display: 'inline-block', marginTop: 20, padding: '9px 24px', borderRadius: 8,
-              background: 'var(--accent)', color: '#fff', fontWeight: 700, textDecoration: 'none', fontSize: 14,
+              display: 'inline-block', marginTop: 24, padding: '12px 24px', borderRadius: 'var(--radius)',
+              background: 'var(--accent)', color: 'var(--bg)', fontWeight: 600, textDecoration: 'none', fontSize: 14,
             }}>Go to Projects</Link>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <p style={{ margin: '0 0 8px', color: 'var(--text)', fontSize: 14 }}>
+            <p style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 14 }}>
               You have <strong style={{ color: 'var(--text-h)' }}>{invites.length}</strong> pending invitation{invites.length !== 1 ? 's' : ''}.
             </p>
             {invites.map((inv) => (
               <div key={inv.id} style={{
-                borderRadius: 14, border: '1px solid var(--border)',
-                background: 'var(--bg)', padding: '20px 24px',
+                borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
+                background: 'var(--bg-card)', padding: '20px 24px',
                 display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                boxShadow: 'var(--shadow-sm)',
               }}>
-                {/* project icon */}
                 <div style={{
-                  width: 52, height: 52, borderRadius: 12,
-                  background: 'var(--accent-bg)', border: '1.5px solid var(--accent-border)',
+                  width: 52, height: 52, borderRadius: 'var(--radius)',
+                  background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 24, flexShrink: 0,
                 }}>📚</div>
-
-                {/* info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-h)', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-h)', marginBottom: 4 }}>
                     {inv.projects?.title || 'Unknown Project'}
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text)' }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                     Invited on {new Date(inv.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                 </div>
-
-                {/* actions */}
                 <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    disabled={actingOn === inv.id}
-                    onClick={() => accept(inv)}
+                  <button type="button" disabled={actingOn === inv.id} onClick={() => accept(inv)}
                     style={{
-                      padding: '9px 20px', borderRadius: 8, fontWeight: 700,
-                      background: 'var(--accent)', color: '#fff', border: 'none',
+                      padding: '10px 20px', borderRadius: 'var(--radius)', fontWeight: 600,
+                      background: 'var(--accent)', color: 'var(--bg)', border: 'none',
                       cursor: actingOn === inv.id ? 'not-allowed' : 'pointer',
                       opacity: actingOn === inv.id ? 0.7 : 1, fontSize: 14,
-                      display: 'flex', alignItems: 'center', gap: 6,
                     }}>
                     {actingOn === inv.id ? '…' : '✓ Accept'}
                   </button>
-                  <button
-                    type="button"
-                    disabled={actingOn === inv.id}
-                    onClick={() => decline(inv)}
+                  <button type="button" disabled={actingOn === inv.id} onClick={() => decline(inv)}
                     style={{
-                      padding: '9px 16px', borderRadius: 8, fontWeight: 600,
-                      background: 'transparent', color: '#dc2626',
-                      border: '1.5px solid rgba(239,68,68,0.4)',
+                      padding: '10px 18px', borderRadius: 'var(--radius)', fontWeight: 500,
+                      background: 'transparent', color: 'var(--danger)',
+                      border: '1px solid rgba(239,68,68,0.4)',
                       cursor: actingOn === inv.id ? 'not-allowed' : 'pointer',
                       opacity: actingOn === inv.id ? 0.7 : 1, fontSize: 14,
                     }}>

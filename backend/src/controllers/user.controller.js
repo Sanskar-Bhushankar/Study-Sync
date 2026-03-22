@@ -29,4 +29,22 @@ async function getInvites(req, res, next) {
   }
 }
 
-module.exports = { getMe, updateMe, getInvites };
+async function getProfileActivity(req, res, next) {
+  try {
+    const data = await userService.getProfileActivity(req.user.id);
+    res.json({ success: true, data });
+  } catch (e) {
+    next(e);
+  }
+}
+
+async function getStats(req, res, next) {
+  try {
+    const data = await userService.getStats(req.user.id);
+    res.json({ success: true, data });
+  } catch (e) {
+    next(e);
+  }
+}
+
+module.exports = { getMe, updateMe, getInvites, getProfileActivity, getStats };
