@@ -1,5 +1,14 @@
 const completionService = require('../services/completion.service');
 
+async function listAllCompletions(req, res, next) {
+  try {
+    const data = await completionService.listAllCompletions(req.params.projectId);
+    res.json({ success: true, data });
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function complete(req, res, next) {
   try {
     const data = await completionService.completeTopic(req.params.projectId, req.params.topicId, req.user.id, req.file);
@@ -37,4 +46,4 @@ async function getMyCompletions(req, res, next) {
   }
 }
 
-module.exports = { complete, listCompletions, getNotesUrl, getMyCompletions };
+module.exports = { complete, listCompletions, listAllCompletions, getNotesUrl, getMyCompletions };

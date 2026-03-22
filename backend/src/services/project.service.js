@@ -1,4 +1,5 @@
 const { supabase } = require('../config/supabase');
+const storageService = require('./storage.service');
 const { NotFoundError } = require('../utils/errors');
 
 async function create(title, description, userId) {
@@ -35,8 +36,31 @@ async function update(projectId, updates) {
 }
 
 async function remove(projectId) {
-  const { error } = await supabase.from('projects').delete().eq('id', projectId);
-  if (error) throw error;
+  // 1. Delete all storage files under study-notes/{projectId}/
+  try {
+    await storageService.deleteProjectStorage(projectId);
+  } catch (storageErr) {
+    console.error('[project.remove] Storage delete failed:', storageErr?.message);
+    throw new Error(`Failed to delete project files: ${storageErr?.message || 'storage error'}`);
+  }
+
+  // 2. Delete DB rows in dependency order (children before parents)
+  const tables = [
+    'subtopic_progress',
+    'topic_completions',
+    'project_invites',
+    'project_members',
+    'topics',
+    'projects',
+  ];
+  for (const table of tables) {
+    const key = table === 'projects' ? 'id' : 'project_id';
+    const { error } = await supabase.from(table).delete().eq(key, projectId);
+    if (error) {
+      console.error(`[project.remove] DB delete failed for ${table}:`, error?.message);
+      throw new Error(`Failed to delete project: ${error?.message || 'database error'}`);
+    }
+  }
 }
 
 async function getMembers(projectId) {

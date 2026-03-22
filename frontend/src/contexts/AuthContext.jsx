@@ -35,8 +35,7 @@ export function AuthProvider({ children }) {
           if (d.access_token) {
             setToken(d.access_token);
             if (d.refresh_token) saveRefreshToken(d.refresh_token);
-            const me = await api.get('/users/me');
-            setUser(me.data);
+            setUser(d.user || (await api.get('/users/me')).data);
             return;
           }
         }
@@ -56,9 +55,9 @@ export function AuthProvider({ children }) {
     const r = await api.post('/auth/login', { email, password });
     setToken(r.access_token);
     if (r.refresh_token) saveRefreshToken(r.refresh_token);
-    const me = await api.get('/users/me');
-    setUser(me.data);
-    return me;
+    const userData = r.user || (await api.get('/users/me')).data;
+    setUser(userData);
+    return { data: userData };
   };
 
   const register = async (email, password, full_name) => {
@@ -67,9 +66,9 @@ export function AuthProvider({ children }) {
     if (session?.access_token) {
       setToken(session.access_token);
       if (session.refresh_token) saveRefreshToken(session.refresh_token);
-      const me = await api.get('/users/me');
-      setUser(me.data);
-      return me;
+      const userData = r.data?.user ? { ...r.data.user, id: r.data.user.id } : (await api.get('/users/me')).data;
+      if (userData) setUser(userData);
+      return { data: userData };
     }
     try {
       return await login(email, password);

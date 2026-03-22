@@ -7,12 +7,14 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [full_name, setFullName] = useState('');
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErr('');
+    setLoading(true);
     try {
       const result = await register(email, password, full_name);
       if (result?.needsConfirmation) {
@@ -22,6 +24,8 @@ export default function Register() {
       navigate('/projects');
     } catch (x) {
       setErr(x.error?.message || 'Registration failed');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -37,7 +41,7 @@ export default function Register() {
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ display: 'block', width: '100%', marginBottom: 8, padding: 8 }} />
           <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ display: 'block', width: '100%', marginBottom: 8, padding: 8 }} />
           {err && <p style={{ color: 'red', marginBottom: 8 }}>{err}</p>}
-          <button type="submit">Sign Up</button>
+          <button type="submit" disabled={loading}>{loading ? 'Creating account…' : 'Sign Up'}</button>
         </form>
         <p style={{ marginTop: 16 }}><Link to="/login">Already have an account</Link></p>
       </main>

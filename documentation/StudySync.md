@@ -447,6 +447,7 @@ Multer configuration that accepts `multipart/form-data`. Validates file MIME typ
 
 |Method|Endpoint|Description|
 |---|---|---|
+|`POST`|`/projects/:projectId/topics/bulk`|👑 Bulk import syllabus: `{ topics: [{ title, subtopics: [string] }] }` — single request for vast syllabi|
 |`POST`|`/projects/:projectId/topics`|👑 Create a new topic in the syllabus|
 |`GET`|`/projects/:projectId/topics`|👥 Get full ordered topic list (with subtopics nested)|
 |`PATCH`|`/projects/:projectId/topics/:topicId`|👑 Rename a topic or update order_index|

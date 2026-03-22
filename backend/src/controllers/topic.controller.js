@@ -1,5 +1,6 @@
 const topicService = require('../services/topic.service');
 const { requireFields, requireOneOf } = require('../utils/validators');
+const { BadRequestError } = require('../utils/errors');
 
 async function create(req, res, next) {
   try {
@@ -50,4 +51,17 @@ async function reorder(req, res, next) {
   }
 }
 
-module.exports = { create, list, update, remove, reorder };
+async function createBulk(req, res, next) {
+  try {
+    const { topics: payload } = req.body;
+    if (!Array.isArray(payload) || payload.length === 0) {
+      return next(new BadRequestError('topics array required and must not be empty'));
+    }
+    const result = await topicService.createBulk(req.params.projectId, payload);
+    res.status(201).json({ success: true, data: result });
+  } catch (e) {
+    next(e);
+  }
+}
+
+module.exports = { create, list, update, remove, reorder, createBulk };

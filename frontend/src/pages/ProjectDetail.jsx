@@ -411,6 +411,11 @@ export default function ProjectDetail() {
   const [inviting, setInviting]       = useState(false);
   const [inviteErr, setInviteErr]     = useState('');
 
+  // delete project
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState('');
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -430,15 +435,12 @@ export default function ProjectDetail() {
       .finally(() => setDashboardLoading(false));
   }, [projectId]);
 
-  const loadAllNotes = useCallback(async (list) => {
-    const result = {};
-    await Promise.all((list || []).map(async (t) => {
-      try {
-        const r = await api.get(`/projects/${projectId}/topics/${t.id}/completions`);
-        result[t.id] = r.data || [];
-      } catch (_) { result[t.id] = []; }
-    }));
-    setAllNotes(result);
+  // Single request replaces N parallel per-topic calls (Issue P fix)
+  const loadAllNotes = useCallback(async () => {
+    try {
+      const r = await api.get(`/projects/${projectId}/completions/all`);
+      setAllNotes(r.data || {});
+    } catch (_) { setAllNotes({}); }
   }, [projectId]);
 
   useEffect(() => {
@@ -457,12 +459,9 @@ export default function ProjectDetail() {
 
   useEffect(() => { if (tab === 'members' && isOwner) loadInvites(); }, [tab, isOwner, loadInvites]);
   useEffect(() => { if (tab === 'dashboard') loadDashboard(); }, [tab, loadDashboard]);
-  // notes: re-run when topics are loaded (topics.length changes from 0)
-  const topicsLen = topics.length;
   useEffect(() => {
-    if (tab === 'notes' && topicsLen > 0) loadAllNotes(topics);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, topicsLen, loadAllNotes]);
+    if (tab === 'notes') loadAllNotes();
+  }, [tab, loadAllNotes]);
 
   const showToast = (msg, type = 'success') => setToast({ msg, type });
 
@@ -513,21 +512,16 @@ export default function ProjectDetail() {
     if (!parsed.length) { showToast('No topics found. Use # for topics and - for subtopics.', 'error'); return; }
     setMdSaving(true);
     try {
-      for (const t of parsed) {
-        const tr = await api.post(`/projects/${projectId}/topics`, { title: t.title });
-        const topicId = tr.data?.id;
-        if (topicId) {
-          for (let i = 0; i < t.subtopics.length; i++) {
-            await api.post(`/projects/${projectId}/topics/${topicId}/subtopics`, { title: t.subtopics[i], order_index: i });
-          }
-        }
-      }
+      const r = await api.post(`/projects/${projectId}/topics/bulk`, { topics: parsed });
+      const { topics: topicCount, subtopics: subtopicCount } = r.data || {};
+      await loadProgress();
       await loadTopics();
       setMdText('');
       setSyllabusMode('ui');
-      showToast(`Imported ${parsed.length} topic(s)!`);
+      showToast(`Imported ${topicCount} topic(s), ${subtopicCount} subtopic(s)!`);
     } catch (e) {
-      showToast(e.error?.message || 'Import failed', 'error');
+      const msg = e.error?.message || e.message || 'Import failed';
+      showToast(msg, 'error');
     } finally { setMdSaving(false); }
   }
 
@@ -555,7 +549,7 @@ export default function ProjectDetail() {
     try {
       await api.post(`/projects/${projectId}/topics/${uploadingFor}/complete`, form);
       await loadProgress();
-      if (tab === 'notes') await loadAllNotes(topics);
+      if (tab === 'notes') await loadAllNotes();
       showToast('Notes uploaded! Topic completed 🎉');
     } catch (e) {
       showToast(e.error?.message || 'Upload failed', 'error');
@@ -578,6 +572,20 @@ export default function ProjectDetail() {
     if (!window.confirm('Cancel this invite?')) return;
     try { await api.delete(`/projects/${projectId}/invites/${id}`); await loadInvites(); showToast('Invite cancelled.'); }
     catch (e) { showToast(e.error?.message || 'Failed', 'error'); }
+  }
+
+  async function handleDeleteProject() {
+    setDeleteErr('');
+    setDeleting(true);
+    try {
+      await api.delete(`/projects/${projectId}`);
+      showToast('Project deleted.');
+      navigate('/projects');
+    } catch (e) {
+      setDeleteErr(e.error?.message || 'Failed to delete project');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   /* ─── guards ─── */
@@ -676,6 +684,7 @@ export default function ProjectDetail() {
             {/* ── MD MODE ── */}
             {syllabusMode === 'md' && isOwner && (
               <div style={{ borderRadius: 12, border: '1.5px solid var(--accent-border)', background: 'var(--code-bg)', padding: 20, marginBottom: 20 }}>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text)' }}>
                   Use <code style={{ fontSize: 12 }}># Topic Title</code> for topics and <code style={{ fontSize: 12 }}>- subtopic</code> for subtopics:
                 </p>
@@ -684,10 +693,11 @@ export default function ProjectDetail() {
                   rows={12}
                   style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)', fontFamily: 'var(--mono)', fontSize: 13, resize: 'vertical', outline: 'none' }}
                 />
-                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button type="button" onClick={saveMdSyllabus} disabled={mdSaving || !mdText.trim()}
-                    style={{ padding: '8px 22px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: mdSaving || !mdText.trim() ? 'not-allowed' : 'pointer', opacity: mdSaving || !mdText.trim() ? 0.6 : 1 }}>
-                    {mdSaving ? 'Importing…' : 'Import Syllabus'}
+                    style={{ padding: '8px 22px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: mdSaving || !mdText.trim() ? 'not-allowed' : 'pointer', opacity: mdSaving || !mdText.trim() ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {mdSaving && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
+                    {mdSaving ? 'Syncing to database…' : 'Import Syllabus'}
                   </button>
                   <button type="button" onClick={() => { setMdText(''); setSyllabusMode('ui'); }}
                     style={{ padding: '8px 18px', borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>
@@ -873,6 +883,20 @@ export default function ProjectDetail() {
                     ))}
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* Danger zone — owner only */}
+            {isOwner && (
+              <section style={{ marginTop: 36, padding: 24, borderRadius: 12, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)' }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#dc2626' }}>Danger zone</h2>
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text)', opacity: 0.9 }}>
+                  Permanently delete this project, all topics, subtopics, members, invites, and uploaded notes. This cannot be undone.
+                </p>
+                <button type="button" onClick={() => { setShowDeleteModal(true); setDeleteErr(''); }}
+                  style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'transparent', border: '1px solid #dc2626', color: '#dc2626', cursor: 'pointer' }}>
+                  Delete Project
+                </button>
               </section>
             )}
           </div>
@@ -1128,6 +1152,38 @@ export default function ProjectDetail() {
           </div>
         )}
       </main>
+
+      {/* Delete project confirmation modal */}
+      {showDeleteModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', padding: 24, boxSizing: 'border-box',
+        }} onClick={() => !deleting && setShowDeleteModal(false)}>
+          <div style={{
+            background: 'var(--bg)', borderRadius: 14, border: '1px solid var(--border)', padding: 28, maxWidth: 420, width: '100%',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: 'var(--text-h)' }}>
+              Delete &quot;{project?.title || 'Project'}&quot;?
+            </h3>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
+              This will permanently remove the project, all topics, subtopics, members, invites, and uploaded notes. This cannot be undone.
+            </p>
+            {deleteErr && <p style={{ margin: '0 0 16px', color: '#dc2626', fontSize: 13 }}>⚠ {deleteErr}</p>}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => !deleting && setShowDeleteModal(false)}
+                style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: deleting ? 'not-allowed' : 'pointer' }}>
+                Cancel
+              </button>
+              <button type="button" onClick={handleDeleteProject} disabled={deleting}
+                style={{ padding: '9px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, background: '#dc2626', border: 'none', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {deleting && <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
+                {deleting ? 'Deleting…' : 'Delete Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: '', type: 'success' })} />
     </div>

@@ -56,25 +56,79 @@ async function completeTopic(projectId, topicId, userId, file) {
 }
 
 async function listCompletions(projectId, topicId) {
-  const { data: rows, error } = await supabase.from('topic_completions').select('user_id, notes_url, notes_type, uploaded_at').eq('project_id', projectId).eq('topic_id', topicId);
+  const { data: rows, error } = await supabase
+    .from('topic_completions')
+    .select('user_id, notes_url, notes_type, uploaded_at')
+    .eq('project_id', projectId)
+    .eq('topic_id', topicId);
   if (error) throw error;
-  const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', (rows || []).map((r) => r.user_id));
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', (rows || []).map((r) => r.user_id));
   const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
-  const signed = await Promise.all((rows || []).map(async (r) => ({ ...r, full_name: profileMap.get(r.user_id), signed_url: await storageService.getSignedUrl(r.notes_url) })));
-  return signed;
+  return (rows || []).map((r) => ({
+    ...r,
+    full_name: profileMap.get(r.user_id),
+    signed_url: storageService.getSignedUrl(r.notes_url),
+  }));
+}
+
+// Single-call alternative used by the Notes tab — returns completions for ALL
+// topics in the project grouped by topic_id, avoiding N parallel requests.
+async function listAllCompletions(projectId) {
+  const { data: rows, error } = await supabase
+    .from('topic_completions')
+    .select('topic_id, user_id, notes_url, notes_type, uploaded_at')
+    .eq('project_id', projectId);
+  if (error) throw error;
+  if (!rows || rows.length === 0) return {};
+
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', userIds);
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
+
+  const grouped = {};
+  for (const r of rows) {
+    if (!grouped[r.topic_id]) grouped[r.topic_id] = [];
+    grouped[r.topic_id].push({
+      user_id: r.user_id,
+      full_name: profileMap.get(r.user_id) || null,
+      notes_url: r.notes_url,
+      notes_type: r.notes_type,
+      uploaded_at: r.uploaded_at,
+      signed_url: storageService.getSignedUrl(r.notes_url),
+    });
+  }
+  return grouped;
 }
 
 async function getNotesSignedUrl(projectId, topicId, userId) {
-  const { data, error } = await supabase.from('topic_completions').select('notes_url').eq('project_id', projectId).eq('topic_id', topicId).eq('user_id', userId).single();
+  const { data, error } = await supabase
+    .from('topic_completions')
+    .select('notes_url')
+    .eq('project_id', projectId)
+    .eq('topic_id', topicId)
+    .eq('user_id', userId)
+    .single();
   if (error || !data) throw new NotFoundError('Completion not found');
   return storageService.getSignedUrl(data.notes_url);
 }
 
 async function getMyCompletions(projectId, userId) {
-  const { data, error } = await supabase.from('topic_completions').select('topic_id, notes_url, notes_type, uploaded_at').eq('project_id', projectId).eq('user_id', userId);
+  const { data, error } = await supabase
+    .from('topic_completions')
+    .select('topic_id, notes_url, notes_type, uploaded_at')
+    .eq('project_id', projectId)
+    .eq('user_id', userId);
   if (error) throw error;
-  const withSigned = await Promise.all((data || []).map(async (r) => ({ ...r, signed_url: await storageService.getSignedUrl(r.notes_url) })));
-  return withSigned;
+  return (data || []).map((r) => ({
+    ...r,
+    signed_url: storageService.getSignedUrl(r.notes_url),
+  }));
 }
 
-module.exports = { completeTopic, listCompletions, getNotesSignedUrl, getMyCompletions };
+module.exports = { completeTopic, listCompletions, listAllCompletions, getNotesSignedUrl, getMyCompletions };

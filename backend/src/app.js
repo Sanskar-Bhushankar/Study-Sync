@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const authRoutes = require('./routes/auth.routes');
@@ -7,6 +8,10 @@ const userRoutes = require('./routes/user.routes');
 const projectRoutes = require('./routes/project.routes');
 const inviteRoutes = require('./routes/invite.routes');
 const topicRoutes = require('./routes/topic.routes');
+const authenticate = require('./middleware/authenticate');
+const isMember = require('./middleware/isMember');
+const isOwner = require('./middleware/isOwner');
+const topicController = require('./controllers/topic.controller');
 const subtopicRoutes = require('./routes/subtopic.routes');
 const progressRoutes = require('./routes/progress.routes');
 const completionRoutes = require('./routes/completion.routes');
@@ -34,7 +39,10 @@ const corsOptions = {
 
 const app = express();
 
-// CORS before everything else — Vercel edge headers also set in vercel.json
+// Gzip all JSON/text responses
+app.use(compression());
+
+// CORS before everything else
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
@@ -100,13 +108,15 @@ app.get('/', (_req, res) => {
 
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/users', apiLimiter, userRoutes);
-app.use('/api/v1/projects', apiLimiter, projectRoutes);
+// Explicit bulk route — must be before /api/v1/projects to avoid being shadowed
+app.post('/api/v1/projects/:projectId/topics/bulk', apiLimiter, authenticate, isMember, isOwner, topicController.createBulk);
 app.use('/api/v1', apiLimiter, inviteRoutes);
 app.use('/api/v1', apiLimiter, topicRoutes);
 app.use('/api/v1', apiLimiter, subtopicRoutes);
 app.use('/api/v1', apiLimiter, progressRoutes);
 app.use('/api/v1', apiLimiter, completionRoutes);
 app.use('/api/v1', apiLimiter, dashboardRoutes);
+app.use('/api/v1/projects', apiLimiter, projectRoutes);
 
 app.use(errorHandler);
 module.exports = app;

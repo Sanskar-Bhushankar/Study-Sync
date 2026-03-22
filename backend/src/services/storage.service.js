@@ -35,46 +35,54 @@ async function uploadNote(projectId, topicId, userId, buffer, mimetype, original
 
   console.log('[storage] Upload success, path:', uploadData?.path || storagePath);
 
-  // Try signed URL first, fall back to public URL (bucket is public)
-  let signedUrl = null;
-  try {
-    const { data: signed, error: signErr } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
-    if (signErr) {
-      console.warn('[storage] Signed URL error (using public URL fallback):', signErr.message);
-    } else {
-      signedUrl = signed?.signedUrl;
-    }
-  } catch (e) {
-    console.warn('[storage] Signed URL exception, using public URL fallback:', e.message);
-  }
-
-  // Always have a usable URL since the bucket is public
-  const publicUrl = getPublicUrl(storagePath);
+  // Bucket is public — use public URL directly, no extra round-trip needed
   return {
     storagePath,
-    signedUrl: signedUrl || publicUrl,
+    signedUrl: getPublicUrl(storagePath),
     notesType: ext === 'pdf' ? 'pdf' : 'image',
   };
 }
 
-async function getSignedUrl(storagePath) {
+// Bucket is public — derive URL from path with zero round-trips
+function getSignedUrl(storagePath) {
   if (!storagePath) return null;
-  try {
-    const { data, error } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
-    if (error) {
-      // Fall back to public URL since bucket is public
-      console.warn('[storage] getSignedUrl error, using public URL:', error.message);
-      return getPublicUrl(storagePath);
+  return getPublicUrl(storagePath);
+}
+
+const REMOVE_BATCH_SIZE = 1000;
+
+/**
+ * Recursively list all file paths under a prefix. Returns paths like "projectId/topicId/userId/file.pdf".
+ */
+async function listAllPathsUnder(prefix) {
+  const paths = [];
+  const { data: items, error } = await supabase.storage.from(BUCKET).list(prefix, { limit: 1000 });
+  if (error) throw error;
+  if (!items || items.length === 0) return paths;
+  for (const item of items) {
+    const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item.id != null) {
+      paths.push(fullPath);
+    } else {
+      const nested = await listAllPathsUnder(fullPath);
+      paths.push(...nested);
     }
-    return data?.signedUrl || getPublicUrl(storagePath);
-  } catch (e) {
-    console.warn('[storage] getSignedUrl exception, using public URL:', e.message);
-    return getPublicUrl(storagePath);
+  }
+  return paths;
+}
+
+/**
+ * Delete all storage objects under study-notes/{projectId}/.
+ * Used when deleting a project. Service role bypasses RLS.
+ */
+async function deleteProjectStorage(projectId) {
+  const paths = await listAllPathsUnder(projectId);
+  if (paths.length === 0) return;
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+    const batch = paths.slice(i, i + REMOVE_BATCH_SIZE);
+    const { error } = await supabase.storage.from(BUCKET).remove(batch);
+    if (error) throw new Error(`Storage delete failed: ${error.message}`);
   }
 }
 
-module.exports = { uploadNote, getSignedUrl, getPublicUrl, BUCKET };
+module.exports = { uploadNote, getSignedUrl, getPublicUrl, deleteProjectStorage, BUCKET };

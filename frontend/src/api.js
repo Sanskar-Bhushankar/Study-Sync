@@ -1,12 +1,18 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-let accessToken = null;
+const RT_KEY = 'ss_rt';
+const AT_KEY = 'ss_at';
+
+let accessToken = (() => {
+  try { return localStorage.getItem(AT_KEY); } catch (_) { return null; }
+})();
 let refreshPromise = null;
 
-const RT_KEY = 'ss_rt';
-
-export function setToken(t) { accessToken = t; }
-export function getToken()  { return accessToken; }
+export function setToken(t) {
+  accessToken = t;
+  try { if (t) localStorage.setItem(AT_KEY, t); else localStorage.removeItem(AT_KEY); } catch (_) {}
+}
+export function getToken() { return accessToken; }
 
 function saveRefreshToken(rt) {
   try { if (rt) localStorage.setItem(RT_KEY, rt); else localStorage.removeItem(RT_KEY); } catch (_) {}
@@ -14,7 +20,11 @@ function saveRefreshToken(rt) {
 function loadRefreshToken() {
   try { return localStorage.getItem(RT_KEY); } catch (_) { return null; }
 }
-export function clearRefreshToken() { saveRefreshToken(null); }
+export function clearRefreshToken() {
+  accessToken = null;
+  saveRefreshToken(null);
+  try { localStorage.removeItem(AT_KEY); } catch (_) {}
+}
 
 async function doRefresh() {
   if (refreshPromise) return refreshPromise;
@@ -34,8 +44,9 @@ async function doRefresh() {
         if (d.refresh_token) saveRefreshToken(d.refresh_token);
         return accessToken;
       }
-      // refresh failed — clear stored token so we don't retry forever
+      // refresh failed — clear stored tokens so we don't retry forever
       saveRefreshToken(null);
+      setToken(null);
       throw { status: r.status, ...d };
     } finally {
       refreshPromise = null;

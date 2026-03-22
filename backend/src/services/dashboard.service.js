@@ -1,6 +1,30 @@
 const { supabase } = require('../config/supabase');
 
+// Per-request in-memory cache: if /summary and /timeline are called in the same
+// request cycle (same Node tick-group), they share one getDashboard computation.
+const _cache = new Map();
+function _getCached(projectId) {
+  const entry = _cache.get(projectId);
+  if (entry && Date.now() - entry.ts < 5000) return entry.promise;
+  return null;
+}
+function _setCache(projectId, promise) {
+  _cache.set(projectId, { promise, ts: Date.now() });
+  promise.finally(() => {
+    const e = _cache.get(projectId);
+    if (e?.promise === promise) _cache.delete(projectId);
+  });
+}
+
 async function getDashboard(projectId) {
+  const cached = _getCached(projectId);
+  if (cached) return cached;
+  const p = _computeDashboard(projectId);
+  _setCache(projectId, p);
+  return p;
+}
+
+async function _computeDashboard(projectId) {
   const { data: project } = await supabase.from('projects').select('id, title').eq('id', projectId).single();
   if (!project) return null;
   const { data: topics } = await supabase.from('topics').select('id').eq('project_id', projectId);
@@ -57,6 +81,7 @@ async function getDashboard(projectId) {
     timeline,
   };
 }
+
 
 async function getSummary(projectId) {
   const full = await getDashboard(projectId);
