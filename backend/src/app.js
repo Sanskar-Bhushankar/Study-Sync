@@ -39,6 +39,9 @@ const corsOptions = {
 
 const app = express();
 
+// Trust proxy (Vercel, nginx, etc.) — required for rate-limit to work behind reverse proxy
+app.set('trust proxy', 1);
+
 // Gzip all JSON/text responses
 app.use(compression());
 
