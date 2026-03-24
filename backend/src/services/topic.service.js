@@ -2,7 +2,19 @@ const { supabase } = require('../config/supabase');
 const { NotFoundError, BadRequestError } = require('../utils/errors');
 
 async function create(projectId, title, orderIndex) {
-  const { data, error } = await supabase.from('topics').insert({ project_id: projectId, title, order_index: orderIndex ?? 0 }).select().single();
+  let resolvedIndex = orderIndex;
+  if (resolvedIndex === undefined || resolvedIndex === null) {
+    const { data: rows, error: maxErr } = await supabase
+      .from('topics')
+      .select('order_index')
+      .eq('project_id', projectId)
+      .order('order_index', { ascending: false })
+      .limit(1);
+    if (maxErr) throw maxErr;
+    const max = rows?.[0]?.order_index;
+    resolvedIndex = typeof max === 'number' && !Number.isNaN(max) ? max + 1 : 0;
+  }
+  const { data, error } = await supabase.from('topics').insert({ project_id: projectId, title, order_index: resolvedIndex }).select().single();
   if (error) throw error;
   return data;
 }

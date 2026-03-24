@@ -428,6 +428,11 @@ function parseMdSyllabus(text) {
   return topics;
 }
 
+/** Single source of display order: `order_index` ascending (matches API). Backend assigns next index on create. */
+function sortByOrderIndex(items) {
+  return [...(items || [])].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+}
+
 /* ══════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════ */
@@ -800,8 +805,9 @@ export default function ProjectDetail() {
                   </div>
                 )}
 
-                {topics.map((topic) => {
+                {sortByOrderIndex(topics).map((topic) => {
                   const pt = progress?.topics?.find((t) => t.id === topic.id);
+                  const subtopicsOrdered = sortByOrderIndex(topic.subtopics);
                   const allMyDone = myTopicAllDone(topic.id);
                   const alreadyCompleted = myTopicCompleted(topic.id);
                   // who completed this topic (proof uploaded)
@@ -847,10 +853,10 @@ export default function ProjectDetail() {
 
                       {/* subtopics */}
                       <div style={{ padding: '10px 18px 14px' }}>
-                        {(topic.subtopics || []).length === 0 && (
+                        {subtopicsOrdered.length === 0 && (
                           <p style={{ fontSize: 13, color: 'var(--text)', opacity: 0.6, margin: '6px 0' }}>No subtopics yet.</p>
                         )}
-                        {(topic.subtopics || []).map((st) => {
+                        {subtopicsOrdered.map((st) => {
                           const comp = pt?.subtopics?.find((s) => s.id === st.id)?.completions || {};
                           const myDone = comp[user.id]?.is_completed;
                           const completors = Object.entries(comp).filter(([, v]) => v.is_completed).map(([uid]) => uid);
@@ -1017,7 +1023,7 @@ export default function ProjectDetail() {
               <p style={{ color: 'var(--text)', opacity: 0.6 }}>No topics in this project yet.</p>
             ) : (
             <>
-            {topics.map((topic) => {
+            {sortByOrderIndex(topics).map((topic) => {
               const notes = allNotes[topic.id] || [];
               if (notes.length === 0) return null;
               return (

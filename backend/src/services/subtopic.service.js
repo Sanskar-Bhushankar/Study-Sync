@@ -6,7 +6,19 @@ async function create(topicId, title, orderIndex, projectId) {
     const { data: topic } = await supabase.from('topics').select('id').eq('id', topicId).eq('project_id', projectId).single();
     if (!topic) throw new NotFoundError('Topic not found');
   }
-  const { data, error } = await supabase.from('subtopics').insert({ topic_id: topicId, title, order_index: orderIndex ?? 0 }).select().single();
+  let resolvedIndex = orderIndex;
+  if (resolvedIndex === undefined || resolvedIndex === null) {
+    const { data: rows, error: maxErr } = await supabase
+      .from('subtopics')
+      .select('order_index')
+      .eq('topic_id', topicId)
+      .order('order_index', { ascending: false })
+      .limit(1);
+    if (maxErr) throw maxErr;
+    const max = rows?.[0]?.order_index;
+    resolvedIndex = typeof max === 'number' && !Number.isNaN(max) ? max + 1 : 0;
+  }
+  const { data, error } = await supabase.from('subtopics').insert({ topic_id: topicId, title, order_index: resolvedIndex }).select().single();
   if (error) throw error;
   return data;
 }
