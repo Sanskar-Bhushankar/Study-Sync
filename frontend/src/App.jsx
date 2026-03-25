@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProjectsCacheProvider } from './contexts/ProjectsCacheContext';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -46,7 +47,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ProjectsCacheProvider>
+          <AppRoutes />
+        </ProjectsCacheProvider>
       </AuthProvider>
     </BrowserRouter>
   );

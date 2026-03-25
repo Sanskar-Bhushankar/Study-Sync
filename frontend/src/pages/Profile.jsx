@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
 import AppHeader from '../components/AppHeader';
+import { STREAK_REFRESH_EVENT } from '../streakRefresh';
 import {
   format,
   startOfMonth,
@@ -286,13 +287,19 @@ export default function Profile() {
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
+  useEffect(() => {
+    const onActivity = () => loadProfile();
+    window.addEventListener(STREAK_REFRESH_EVENT, onActivity);
+    return () => window.removeEventListener(STREAK_REFRESH_EVENT, onActivity);
+  }, [loadProfile]);
+
   if (!user) { navigate('/login'); return null; }
 
   return (
     <>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
       <div style={{ minHeight: '100svh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-        <AppHeader user={user} streak={data?.streak} onLogout={() => logout().then(() => navigate('/'))} />
+        <AppHeader user={user} onLogout={() => logout().then(() => navigate('/'))} />
 
         <main style={{ flex: 1, maxWidth: 900, width: '100%', margin: '0 auto', padding: 'clamp(16px, 4vw, 40px) clamp(12px, 4vw, 28px)', boxSizing: 'border-box' }}>
           <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600, color: 'var(--text-h)' }}>Your profile</h1>

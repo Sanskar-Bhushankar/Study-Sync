@@ -1,28 +1,10 @@
-import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../api';
-
-function computeStreakClient(activityDates) {
-  if (!activityDates?.length) return 0;
-  const set = new Set(activityDates);
-  const sorted = [...set].sort().reverse();
-  const mostRecent = sorted[0];
-  let streak = 0;
-  const d = new Date(mostRecent + 'T12:00:00');
-  for (let i = 0; i < 365; i++) {
-    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
-    const dateStr = `${y}-${m}-${day}`;
-    if (set.has(dateStr)) streak++;
-    else break;
-    d.setDate(d.getDate() - 1);
-  }
-  return streak;
-}
 
 /**
  * Shared header for Projects, Profile, Invitations, and ProjectDetail.
- * Fetches streak and pending invites. Mobile-responsive.
+ * Streak & invite badge come from AuthContext (one batch fetch; not repeated on every route change).
+ * Updates on login and on `STREAK_REFRESH_EVENT` via `refreshHeaderStats`.
  */
 export default function AppHeader({
   user,
@@ -30,43 +12,11 @@ export default function AppHeader({
   variant = 'main', // 'main' | 'invitations' | 'project'
   projectTitle,
   projectDescription,
-  badge, // e.g. <Badge color="owner">Owner</Badge>
+  badge,
   onDeleteProject,
-  streak: streakProp, // when Profile loads, pass streak to avoid refetch
 }) {
   const location = useLocation();
-  const [streak, setStreak] = useState(streakProp ?? 0);
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    if (typeof streakProp === 'number') {
-      setStreak(streakProp);
-      return;
-    }
-  }, [streakProp]);
-
-  useEffect(() => {
-    if (typeof streakProp === 'number') return;
-    api.get('/users/me/profile')
-      .then((r) => {
-        const payload = (r && r.data) ? r.data : (r && typeof r === 'object') ? r : {};
-        let s = payload.streak;
-        if (typeof s !== 'number' && payload.heatmap && Object.keys(payload.heatmap || {}).length > 0) {
-          s = computeStreakClient(Object.keys(payload.heatmap).filter((d) => (payload.heatmap[d] || 0) > 0));
-        }
-        setStreak(typeof s === 'number' ? s : 0);
-      })
-      .catch(() => setStreak(0));
-  }, [location.pathname]);
-
-  useEffect(() => {
-    api.get('/users/me/invites')
-      .then((r) => {
-        const arr = (r && r.data) ? r.data : (Array.isArray(r) ? r : []);
-        setPendingCount(Array.isArray(arr) ? arr.length : 0);
-      })
-      .catch(() => {});
-  }, [location.pathname]);
+  const { headerStreak, pendingInvites } = useAuth();
 
   const isProfile = location.pathname === '/profile';
   const isProjects = location.pathname === '/projects';
@@ -88,7 +38,6 @@ export default function AppHeader({
         zIndex: 100,
       }}
     >
-      {/* Left: logo / back / title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
         {variant === 'project' ? (
           <>
@@ -148,7 +97,6 @@ export default function AppHeader({
         )}
       </div>
 
-      {/* Right: invite, user block, actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0 }}>
         {variant !== 'invitations' && (
           <Link
@@ -165,7 +113,7 @@ export default function AppHeader({
             }}
           >
             🔔
-            {pendingCount > 0 && (
+            {pendingInvites > 0 && (
               <span
                 style={{
                   position: 'absolute',
@@ -184,7 +132,7 @@ export default function AppHeader({
                   padding: '0 4px',
                 }}
               >
-                {pendingCount}
+                {pendingInvites}
               </span>
             )}
           </Link>
@@ -194,10 +142,10 @@ export default function AppHeader({
             {user?.full_name || user?.email}
           </span>
           <span style={{
-            fontSize: 12, color: streak > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 600,
+            fontSize: 12, color: headerStreak > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 600,
             display: 'flex', alignItems: 'center', gap: 4,
           }} title="Consecutive days with activity">
-            🔥 {streak} day{streak !== 1 ? 's' : ''} streak
+            🔥 {headerStreak} day{headerStreak !== 1 ? 's' : ''} streak
           </span>
         </div>
         {variant === 'project' && onDeleteProject && (

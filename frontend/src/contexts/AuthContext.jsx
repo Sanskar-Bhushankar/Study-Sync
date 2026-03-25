@@ -1,11 +1,16 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { api, setToken, getToken, saveRefreshToken, clearRefreshToken } from '../api';
+import { STREAK_REFRESH_EVENT } from '../streakRefresh';
+import { extractActivityPayload, streakFromPayload } from '../utils/headerStats';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
+  const [headerStreak, setHeaderStreak] = useState(0);
+  const [pendingInvites, setPendingInvites] = useState(0);
+  const headerStatsGen        = useRef(0);
   const initialized           = useRef(false);
 
   useEffect(() => {
@@ -51,6 +56,48 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
+  /**
+   * Single batch: `/users/me` + profile (streak) + pending invites.
+   * Not tied to React Router — avoids refetch on every /projects ↔ /profile navigation.
+   */
+  const refreshHeaderStats = useCallback(async () => {
+    if (!getToken()) return;
+    const gen = ++headerStatsGen.current;
+    const wrap = (p) => p.then((r) => ({ ok: true, r })).catch(() => ({ ok: false }));
+
+    const [meRes, profileRes, invitesRes] = await Promise.all([
+      wrap(api.get('/users/me')),
+      wrap(api.get('/users/me/profile')),
+      wrap(api.get('/users/me/invites')),
+    ]);
+    if (gen !== headerStatsGen.current) return;
+
+    if (meRes.ok && meRes.r?.data != null) setUser(meRes.r.data);
+
+    if (profileRes.ok) {
+      const payload = extractActivityPayload(profileRes.r);
+      setHeaderStreak(streakFromPayload(payload));
+    }
+
+    if (invitesRes.ok) {
+      const r = invitesRes.r;
+      const arr = (r && r.data !== undefined) ? r.data : (Array.isArray(r) ? r : []);
+      setPendingInvites(Array.isArray(arr) ? arr.length : 0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || !user?.id) return;
+    refreshHeaderStats();
+  }, [loading, user?.id, refreshHeaderStats]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const onActivity = () => { refreshHeaderStats(); };
+    window.addEventListener(STREAK_REFRESH_EVENT, onActivity);
+    return () => window.removeEventListener(STREAK_REFRESH_EVENT, onActivity);
+  }, [user?.id, refreshHeaderStats]);
+
   const login = async (email, password) => {
     const r = await api.post('/auth/login', { email, password });
     setToken(r.access_token);
@@ -82,10 +129,32 @@ export function AuthProvider({ children }) {
     setToken(null);
     clearRefreshToken();
     setUser(null);
+    headerStatsGen.current += 1;
+    setHeaderStreak(0);
+    setPendingInvites(0);
   };
 
+  /** Re-fetch `/users/me` so header name/email reflect profile edits without full reload. */
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const me = await api.get('/users/me');
+      if (me?.data != null) setUser(me.data);
+    } catch (_) {}
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      register,
+      logout,
+      refreshUser,
+      headerStreak,
+      pendingInvites,
+      refreshHeaderStats,
+    }}>
       {children}
     </AuthContext.Provider>
   );

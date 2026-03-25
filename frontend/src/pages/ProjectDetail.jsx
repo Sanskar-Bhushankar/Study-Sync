@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api';
 import AppHeader from '../components/AppHeader';
+import { notifyStreakMayHaveChanged } from '../streakRefresh';
 
 /* ─── Avatar chip ─── */
 function Avatar({ name, size = 24, title }) {
@@ -596,6 +597,7 @@ export default function ProjectDetail() {
     try {
       if (isCompleted) await api.delete(`/projects/${projectId}/subtopics/${subtopicId}/complete`);
       else await api.post(`/projects/${projectId}/subtopics/${subtopicId}/complete`);
+      notifyStreakMayHaveChanged();
       await loadProgress();
     } catch (e) { showToast(e.error?.message || 'Could not update progress', 'error'); }
     finally { setTogglingSubtopicId(null); }
@@ -616,6 +618,7 @@ export default function ProjectDetail() {
     setUploadProgress(0);
     try {
       const r = await api.uploadWithProgress(`/projects/${projectId}/topics/${uploadingFor}/complete`, form, (pct) => setUploadProgress(pct));
+      notifyStreakMayHaveChanged();
       await loadProgress();
       if (tab === 'notes') await loadAllNotes();
       showToast('Notes uploaded! Topic completed 🎉');

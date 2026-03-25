@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useProjectsCache } from '../contexts/ProjectsCacheContext';
 import { api } from '../api';
 import AppHeader from '../components/AppHeader';
 
@@ -47,31 +48,36 @@ function ProjectCardSkeleton() {
 }
 
 export default function Projects() {
-  const [list, setList]         = useState([]);
   const [title, setTitle]       = useState('');
   const [desc, setDesc]         = useState('');
   const [err, setErr]           = useState('');
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [loadingProjects, setLoadingProjects] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // project object
   const { user, logout } = useAuth();
+  const {
+    projects: list,
+    projectsLoading,
+    projectsHydrated,
+    ensureProjectsLoaded,
+    prependProject,
+    removeProjectFromCache,
+  } = useProjectsCache();
   const navigate = useNavigate();
 
-  const loadProjects = useCallback(() =>
-    api.get('/projects').then((r) => setList(r.data || [])).catch(() => setList([])), []);
-
   useEffect(() => {
-    setLoadingProjects(true);
-    loadProjects().finally(() => setLoadingProjects(false));
-  }, [loadProjects]);
+    if (!user?.id) return;
+    ensureProjectsLoaded();
+  }, [user?.id, ensureProjectsLoaded]);
+
+  const loadingProjects = projectsLoading || !projectsHydrated;
 
   async function deleteProject(project) {
     setDeletingId(project.id);
     try {
       await api.delete(`/projects/${project.id}`);
-      setList((prev) => prev.filter((p) => p.id !== project.id));
+      removeProjectFromCache(project.id);
     } catch (x) {
       alert(x.error?.message || 'Failed to delete project');
     } finally {
@@ -86,7 +92,7 @@ export default function Projects() {
     setCreating(true);
     try {
       const r = await api.post('/projects', { title: title.trim(), description: desc.trim() || undefined });
-      setList((prev) => [r.data, ...prev]);
+      prependProject(r.data);
       setTitle(''); setDesc(''); setShowForm(false);
     } catch (x) {
       setErr(x.error?.message || 'Failed to create project');

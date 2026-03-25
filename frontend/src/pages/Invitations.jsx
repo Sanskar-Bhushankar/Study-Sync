@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useProjectsCache } from '../contexts/ProjectsCacheContext';
 import { api } from '../api';
 import AppHeader from '../components/AppHeader';
 
@@ -35,7 +36,8 @@ function Toast({ msg, type, onClose }) {
 }
 
 export default function Invitations() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshHeaderStats } = useAuth();
+  const { invalidateProjectsCache } = useProjectsCache();
   const navigate = useNavigate();
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,8 @@ export default function Invitations() {
     setActingOn(inv.id);
     try {
       await api.post(`/invites/${inv.id}/accept`);
+      invalidateProjectsCache();
+      refreshHeaderStats();
       showToast(`Joined "${inv.projects?.title || 'project'}" 🎉`);
       setTimeout(() => navigate(`/projects/${inv.project_id}`), 1200);
     } catch (e) {
@@ -76,6 +80,7 @@ export default function Invitations() {
       await api.post(`/invites/${inv.id}/decline`);
       showToast('Invite declined.');
       await loadInvites();
+      refreshHeaderStats();
     } catch (e) {
       showToast(e.error?.message || 'Failed to decline', 'error');
     } finally {
