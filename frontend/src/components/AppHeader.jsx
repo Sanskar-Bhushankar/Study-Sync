@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
- * Shared header for Projects, Profile, Invitations, and ProjectDetail.
+ * Shared header for Projects, Compiler, Profile, Invitations, and ProjectDetail.
  * Streak & invite badge come from AuthContext (one batch fetch; not repeated on every route change).
  * Updates on login and on `STREAK_REFRESH_EVENT` via `refreshHeaderStats`.
  */
@@ -20,6 +20,7 @@ export default function AppHeader({
 
   const isProfile = location.pathname === '/profile';
   const isProjects = location.pathname === '/projects';
+  const isCompiler = location.pathname === '/compiler';
 
   return (
     <header
@@ -77,6 +78,20 @@ export default function AppHeader({
                 }}
               >
                 Projects
+              </Link>
+              <Link
+                to="/compiler"
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius)',
+                  fontSize: 13,
+                  fontWeight: isCompiler ? 600 : 500,
+                  color: isCompiler ? 'var(--accent)' : 'var(--text-muted)',
+                  background: isCompiler ? 'var(--accent-dim)' : 'transparent',
+                  textDecoration: 'none',
+                }}
+              >
+                Compiler
               </Link>
               <Link
                 to="/profile"

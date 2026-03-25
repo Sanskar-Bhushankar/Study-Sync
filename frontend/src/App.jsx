@@ -11,6 +11,7 @@ const Projects = lazy(() => import('./pages/Projects'));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Invitations = lazy(() => import('./pages/Invitations'));
+const OnlineCompiler = lazy(() => import('./pages/OnlineCompiler'));
 
 function PageFallback() {
   return (
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="/projects/:projectId" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/invitations" element={<PrivateRoute><Invitations /></PrivateRoute>} />
+        <Route path="/compiler" element={<PrivateRoute><OnlineCompiler /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
