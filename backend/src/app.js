@@ -17,13 +17,9 @@ const progressRoutes = require('./routes/progress.routes');
 const completionRoutes = require('./routes/completion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const errorHandler = require('./middleware/errorHandler');
+const { getAllowedOrigins } = require('./config/env');
 
-const ALLOWED_ORIGINS = [
-  'https://study-sync-475p.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://localhost:4000',
-];
+const ALLOWED_ORIGINS = getAllowedOrigins();
 
 const corsOptions = {
   origin: (origin, callback) => {

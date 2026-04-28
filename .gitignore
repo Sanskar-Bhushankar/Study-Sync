@@ -1,1 +1,14 @@
 documentation/
+.env
+frontend/node_modules
+backend/node_modules
+frontend/env
+backend/env
+frontend/env.example
+backend/env.example
+frontend/dist
+backend/dist
+frontend/dist-ssr
+backend/dist-ssr
+frontend/build
+backend/build
