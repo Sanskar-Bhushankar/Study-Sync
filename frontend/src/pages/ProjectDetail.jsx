@@ -218,12 +218,13 @@ function MembersSkeleton() {
 }
 
 /* ─── GitHub-style contribution graph ─── */
-function ContributionGraph({ timeline, members: memberList, memberMap }) {
+function ContributionGraph({ timeline, revisionByUser, members: memberList, memberMap }) {
   const TODAY = new Date();
   const WEEKS = 26;
   const TOTAL_DAYS = WEEKS * 7;
+  const CELL = 14, GAP = 3, DAY_LABEL_W = 18;
 
-  // Build a map of date → total completions across all users
+  // Build date→total completions (subtopics only)
   const dateTotals = {};
   Object.values(timeline || {}).forEach((entries) => {
     if (!Array.isArray(entries)) return;
@@ -235,7 +236,15 @@ function ContributionGraph({ timeline, members: memberList, memberMap }) {
     });
   });
 
-  // Build a per-user daily map
+  // Revision dates per user
+  const allRevisionDates = {};
+  Object.values(revisionByUser || {}).forEach((dateMap) => {
+    Object.keys(dateMap || {}).forEach((d) => {
+      allRevisionDates[d] = (allRevisionDates[d] || 0) + (dateMap[d] || 1);
+    });
+  });
+
+  // Per-user daily map (for tooltip)
   const userDailyMap = {};
   Object.entries(timeline || {}).forEach(([uid, entries]) => {
     if (!Array.isArray(entries)) return;
@@ -250,39 +259,36 @@ function ContributionGraph({ timeline, members: memberList, memberMap }) {
 
   const maxVal = Math.max(1, ...Object.values(dateTotals));
 
-  function getColor(count) {
-    if (!count) return 'var(--border)';
+  function getColor(count, isRevisionOnly) {
+    if (!count && !isRevisionOnly) return 'var(--border)';
+    if (isRevisionOnly) return 'rgba(139,92,246,0.65)';
     const intensity = count / maxVal;
-    if (intensity < 0.25) return 'rgba(34,211,238,0.25)';
-    if (intensity < 0.5)  return 'rgba(34,211,238,0.5)';
-    if (intensity < 0.75) return 'rgba(34,211,238,0.75)';
+    if (intensity < 0.2) return 'rgba(34,211,238,0.2)';
+    if (intensity < 0.4) return 'rgba(34,211,238,0.4)';
+    if (intensity < 0.65) return 'rgba(34,211,238,0.65)';
+    if (intensity < 0.85) return 'rgba(34,211,238,0.85)';
     return 'var(--accent)';
   }
 
-  // Build grid: columns = weeks (oldest left), rows = days (Sun→Sat)
   const days = [];
   for (let i = TOTAL_DAYS - 1; i >= 0; i--) {
     const d = new Date(TODAY);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
-    days.push({ dateStr, count: dateTotals[dateStr] || 0 });
+    days.push({ dateStr, count: dateTotals[dateStr] || 0, revisions: allRevisionDates[dateStr] || 0 });
   }
 
-  // Pad so grid starts on Sunday
   const firstDow = new Date(days[0].dateStr).getDay();
   const padded = [...Array(firstDow).fill(null), ...days];
   const weeks = [];
   for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7));
 
-  // Month labels
   const monthLabels = [];
   weeks.forEach((wk, wi) => {
     const firstReal = wk.find(Boolean);
     if (firstReal) {
       const d = new Date(firstReal.dateStr);
-      if (d.getDate() <= 7) {
-        monthLabels.push({ wi, label: d.toLocaleString('default', { month: 'short' }) });
-      }
+      if (d.getDate() <= 7) monthLabels.push({ wi, label: d.toLocaleString('default', { month: 'short' }) });
     }
   });
 
@@ -294,70 +300,81 @@ function ContributionGraph({ timeline, members: memberList, memberMap }) {
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-h)' }}>📅 Activity Heatmap</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text)' }}>
           <span>Less</span>
-          {['var(--border)','rgba(34,211,238,0.25)','rgba(34,211,238,0.5)','rgba(34,211,238,0.75)','var(--accent)'].map((c,i) => (
-            <div key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,0.1)' }} />
+          {['var(--border)','rgba(34,211,238,0.2)','rgba(34,211,238,0.4)','rgba(34,211,238,0.65)','var(--accent)'].map((c,i) => (
+            <div key={i} style={{ width: CELL, height: CELL, borderRadius: 3, background: c, border: '1px solid rgba(0,0,0,0.1)' }} />
           ))}
           <span>More</span>
+          <div style={{ width: CELL, height: CELL, borderRadius: 3, background: 'rgba(139,92,246,0.65)', border: '1px solid rgba(0,0,0,0.1)' }} />
+          <span style={{ color: '#8b5cf6' }}>Revised</span>
         </div>
       </div>
 
       <div style={{ position: 'relative', minWidth: 0 }}>
-        {/* month labels row */}
-        <div style={{ display: 'flex', marginBottom: 4, paddingLeft: 22 }}>
+        {/* Month labels row */}
+        <div style={{ display: 'flex', marginBottom: 4, paddingLeft: DAY_LABEL_W + 4 }}>
           {weeks.map((_, wi) => {
             const ml = monthLabels.find(m => m.wi === wi);
-            return <div key={wi} style={{ width: 13, marginRight: 2, fontSize: 9, color: 'var(--text)', textAlign: 'left', flexShrink: 0 }}>{ml?.label || ''}</div>;
+            return <div key={wi} style={{ width: CELL + GAP, fontSize: 10, color: 'var(--text)', flexShrink: 0, overflow: 'hidden' }}>{ml?.label || ''}</div>;
           })}
         </div>
 
         <div style={{ display: 'flex', gap: 0 }}>
-          {/* day labels */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4, paddingTop: 0 }}>
+          {/* Day labels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: GAP, marginRight: 4 }}>
             {['','M','','W','','F',''].map((d, i) => (
-              <div key={i} style={{ height: 11, fontSize: 9, color: 'var(--text)', lineHeight: '11px', width: 14, textAlign: 'right' }}>{d}</div>
+              <div key={i} style={{ height: CELL, fontSize: 9, color: 'var(--text)', lineHeight: `${CELL}px`, width: DAY_LABEL_W, textAlign: 'right' }}>{d}</div>
             ))}
           </div>
 
-          {/* grid */}
-          <div style={{ display: 'flex', gap: 2 }}>
+          {/* Grid */}
+          <div style={{ display: 'flex', gap: GAP, position: 'relative' }}>
             {weeks.map((wk, wi) => (
-              <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {wk.map((day, di) => (
-                  <div
-                    key={di}
-                    onMouseEnter={day ? (e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const who = Object.entries(userDailyMap)
-                        .filter(([, m]) => m[day.dateStr] > 0)
-                        .map(([uid, m]) => `${memberMap[uid] || uid}: ${m[day.dateStr]}`)
-                        .join(', ');
-                      setTooltip({ x: rect.left, y: rect.top - 40, text: `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}${who ? ` (${who})` : ''}` });
-                    } : undefined}
-                    onMouseLeave={() => setTooltip(null)}
-                    style={{
-                      width: 11, height: 11, borderRadius: 2,
-                      background: day ? getColor(day.count) : 'transparent',
-                      border: day ? '1px solid rgba(0,0,0,0.06)' : 'none',
-                      cursor: day ? 'pointer' : 'default',
-                      transition: 'transform 0.1s',
-                    }}
-                  />
-                ))}
+              <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
+                {wk.map((day, di) => {
+                  const isRevisionOnly = day && day.count === 0 && day.revisions > 0;
+                  return (
+                    <div
+                      key={di}
+                      title={day ? `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}${day.revisions ? `, ${day.revisions} revision${day.revisions !== 1 ? 's' : ''}` : ''}` : undefined}
+                      onMouseEnter={day ? () => {
+                        const who = Object.entries(userDailyMap)
+                          .filter(([, m]) => m[day.dateStr] > 0)
+                          .map(([uid, m]) => `${memberMap[uid] || uid}: ${m[day.dateStr]}`)
+                          .join(', ');
+                        const revText = day.revisions ? ` · ${day.revisions} revision${day.revisions !== 1 ? 's' : ''}` : '';
+                        setTooltip({ wi, di, text: `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}${revText}${who ? ` (${who})` : ''}` });
+                      } : undefined}
+                      onMouseLeave={() => setTooltip(null)}
+                      style={{
+                        width: CELL, height: CELL, borderRadius: 3,
+                        background: day ? getColor(day.count, isRevisionOnly) : 'transparent',
+                        border: day ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                        cursor: day ? 'pointer' : 'default',
+                        transition: 'transform 0.1s',
+                        flexShrink: 0,
+                      }}
+                    />
+                  );
+                })}
               </div>
             ))}
+
+            {/* Tooltip inside grid (no scroll issues) */}
+            {tooltip && (
+              <div style={{
+                position: 'absolute',
+                left: tooltip.wi * (CELL + GAP) + CELL / 2,
+                top: tooltip.di * (CELL + GAP) - 36,
+                transform: 'translateX(-50%)',
+                background: 'var(--code-bg)', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '5px 10px', fontSize: 11,
+                color: 'var(--text-h)', zIndex: 50, pointerEvents: 'none',
+                whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              }}>{tooltip.text}</div>
+            )}
           </div>
         </div>
       </div>
-
-      {tooltip && (
-        <div style={{
-          position: 'fixed', left: tooltip.x, top: tooltip.y,
-          background: 'var(--code-bg)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '5px 10px', fontSize: 11,
-          color: 'var(--text-h)', zIndex: 9999, pointerEvents: 'none',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxWidth: 280, whiteSpace: 'pre-wrap',
-        }}>{tooltip.text}</div>
-      )}
     </div>
   );
 }
@@ -469,11 +486,27 @@ export default function ProjectDetail() {
   const [uploadingFor, setUploadingFor]   = useState(null); // topicId
   const fileInputRef = useRef(null);
 
+  // revision state
+  const [revisionModal, setRevisionModal] = useState(null); // { topicId, topicTitle }
+  const [revisionNote, setRevisionNote]   = useState('');
+  const [revisionSaving, setRevisionSaving] = useState(false);
+  const [revisionHistory, setRevisionHistory] = useState(null); // { topicId, topicTitle, items[] }
+  const [revisionHistoryLoading, setRevisionHistoryLoading] = useState(false);
+  const [revisionCounts, setRevisionCounts] = useState({}); // topicId -> count
+
   // invite state
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting]       = useState(false);
   const [inviteErr, setInviteErr]     = useState('');
 
+  // mark-all + personal notes state
+  const [markingAllFor, setMarkingAllFor] = useState(null); // topicId
+  const [myCompletions, setMyCompletions] = useState({}); // topicId → {signed_url, notes_type}
+  const [noteExpanded, setNoteExpanded]   = useState(null); // subtopicId
+  const [localNotes, setLocalNotes]       = useState({}); // subtopicId → text
+  const [savingNote, setSavingNote]       = useState(null); // subtopicId
+  const [calendarSyncedTopics, setCalendarSyncedTopics] = useState(new Set());
+  const [calendarSyncingTopic, setCalendarSyncingTopic] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -484,6 +517,23 @@ export default function ProjectDetail() {
   const loadTopics   = useCallback(() => api.get(`/projects/${projectId}/topics`).then((r) => setTopics(r.data || [])).catch(() => {}), [projectId]);
   const loadProgress = useCallback(() => api.get(`/projects/${projectId}/progress`).then((r) => setProgress(r)).catch(() => {}), [projectId]);
   const loadMembers  = useCallback(() => api.get(`/projects/${projectId}/members`).then((r) => setMembers(r.data || [])).catch(() => {}), [projectId]);
+  const loadMyCompletions = useCallback(() => {
+    api.get(`/projects/${projectId}/completions/me`).then((r) => {
+      const map = {};
+      (r.data || []).forEach((c) => { map[c.topic_id] = c; });
+      setMyCompletions(map);
+    }).catch(() => {});
+  }, [projectId]);
+  const loadCalendarSyncStatus = useCallback(() => {
+    api.get('/integrations/google/log').then((r) => {
+      const synced = new Set(
+        (r.data?.logs || [])
+          .filter((l) => l.event_type === 'topic_complete' && l.topic_id)
+          .map((l) => l.topic_id)
+      );
+      setCalendarSyncedTopics(synced);
+    }).catch(() => setCalendarSyncedTopics(new Set()));
+  }, []);
   const [inviteLoading, setInviteLoading] = useState(false);
   const loadInvites  = useCallback(async () => {
     setInviteLoading(true);
@@ -518,6 +568,8 @@ export default function ProjectDetail() {
         loadTopics(),
         loadProgress(),
         loadMembers(),
+        loadMyCompletions(),
+        loadCalendarSyncStatus(),
       ]);
       setLoading(false);
     }
@@ -526,9 +578,8 @@ export default function ProjectDetail() {
 
   useEffect(() => { if (tab === 'members' && isOwner) loadInvites(); }, [tab, isOwner, loadInvites]);
   useEffect(() => { if (tab === 'dashboard') loadDashboard(); }, [tab, loadDashboard]);
-  useEffect(() => {
-    if (tab === 'notes') loadAllNotes();
-  }, [tab, loadAllNotes]);
+  useEffect(() => { if (tab === 'notes') loadAllNotes(); }, [tab, loadAllNotes]);
+  useEffect(() => { if (tab === 'syllabus') loadRevisionCounts(); }, [tab, projectId]); // eslint-disable-line
 
   const showToast = (msg, type = 'success') => setToast({ msg, type });
 
@@ -641,6 +692,87 @@ export default function ProjectDetail() {
       setDeletingProject(false);
       setShowDeleteModal(false);
     }
+  }
+
+  /* ─── mark all done ─── */
+  async function markAllDone(topicId) {
+    if (markingAllFor) return;
+    setMarkingAllFor(topicId);
+    try {
+      await api.post(`/projects/${projectId}/topics/${topicId}/progress/mark-all`);
+      notifyStreakMayHaveChanged();
+      await Promise.all([loadProgress(), loadMyCompletions()]);
+      showToast('All subtopics marked as done!');
+    } catch (err) {
+      showToast(err?.error?.message || 'Failed to mark all done', 'error');
+    } finally { setMarkingAllFor(null); }
+  }
+
+  /* ─── personal notes ─── */
+  async function savePersonalNote(subtopicId) {
+    setSavingNote(subtopicId);
+    try {
+      await api.patch(`/projects/${projectId}/subtopics/${subtopicId}/note`, { note: localNotes[subtopicId] || '' });
+    } catch (_) {} finally { setSavingNote(null); }
+  }
+
+  async function syncTopicToCalendar(topicId) {
+    setCalendarSyncingTopic(topicId);
+    try {
+      await api.post('/integrations/google/sync', { type: 'topic_complete', projectId, topicId });
+      setCalendarSyncedTopics((prev) => new Set([...prev, topicId]));
+      showToast('Synced to Google Calendar');
+    } catch (err) {
+      showToast(err?.error?.message || 'Calendar sync failed', 'error');
+    } finally { setCalendarSyncingTopic(null); }
+  }
+
+  /* ─── revision actions ─── */
+  async function loadRevisionCounts() {    try {
+      const r = await api.get(`/projects/${projectId}/revisions`);
+      const counts = {};
+      (r.data || []).forEach((rev) => {
+        counts[rev.topic_id] = (counts[rev.topic_id] || 0) + 1;
+      });
+      setRevisionCounts(counts);
+    } catch (_) {}
+  }
+
+  async function submitRevision(e) {
+    e.preventDefault();
+    if (!revisionModal) return;
+    setRevisionSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/topics/${revisionModal.topicId}/revisions`, { note: revisionNote.trim() || undefined });
+      notifyStreakMayHaveChanged();
+      setRevisionModal(null);
+      setRevisionNote('');
+      await loadRevisionCounts();
+      showToast('Revision logged! 🔁');
+    } catch (e) {
+      showToast(e.error?.message || 'Could not log revision', 'error');
+    } finally { setRevisionSaving(false); }
+  }
+
+  async function openRevisionHistory(topicId, topicTitle) {
+    setRevisionHistory({ topicId, topicTitle, items: [] });
+    setRevisionHistoryLoading(true);
+    try {
+      const r = await api.get(`/projects/${projectId}/topics/${topicId}/revisions`);
+      setRevisionHistory({ topicId, topicTitle, items: r.data || [] });
+    } catch (_) {
+      setRevisionHistory({ topicId, topicTitle, items: [] });
+    } finally { setRevisionHistoryLoading(false); }
+  }
+
+  async function doDeleteRevision(revisionId, topicId, topicTitle) {
+    if (!window.confirm('Delete this revision?')) return;
+    try {
+      await api.delete(`/projects/${projectId}/revisions/${revisionId}`);
+      await loadRevisionCounts();
+      await openRevisionHistory(topicId, topicTitle);
+      showToast('Revision deleted.');
+    } catch (_) { showToast('Could not delete revision', 'error'); }
   }
 
   /* ─── invite actions ─── */
@@ -803,8 +935,11 @@ export default function ProjectDetail() {
             {syllabusMode === 'ui' && (
               <>
                 {topics.length === 0 && !showAddTopic && (
-                  <div style={{ padding: 40, textAlign: 'center', borderRadius: 12, border: '2px dashed var(--border)', color: 'var(--text)' }}>
-                    {isOwner ? 'No topics yet. Use 🧩 UI mode or 📝 Markdown mode to build your syllabus.' : 'No syllabus added yet.'}
+                  <div style={{ padding: '40px 24px', textAlign: 'center', borderRadius: 12, border: '2px dashed var(--border)', color: 'var(--text)', background: 'var(--bg-card)' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div>
+                    {isOwner
+                      ? <><p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: 15 }}>No topics yet</p><p style={{ margin: '0 0 16px', color: 'var(--text-muted)', fontSize: 13 }}>Add your first topic to start building your syllabus.</p><button type="button" onClick={() => setShowAddTopic(true)} style={{ padding: '8px 20px', borderRadius: 'var(--radius)', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>＋ Add first topic</button></>
+                      : <><p style={{ margin: 0, fontWeight: 600 }}>No syllabus added yet.</p><p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>The project owner hasn't added any topics.</p></>}
                   </div>
                 )}
 
@@ -831,6 +966,18 @@ export default function ProjectDetail() {
                           )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {/* Mark all done — when subtopics exist but not all mine are done */}
+                          {!alreadyCompleted && subtopicsOrdered.length > 0 && !subtopicsOrdered.every((st) => {
+                            const comp = pt?.subtopics?.find((s) => s.id === st.id)?.completions || {};
+                            return comp[user.id]?.is_completed;
+                          }) && (
+                            <button type="button" onClick={() => {
+                              if (window.confirm(`Mark all ${subtopicsOrdered.length} subtopics as done?`)) markAllDone(topic.id);
+                            }} disabled={markingAllFor === topic.id}
+                              style={{ padding: '4px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: markingAllFor === topic.id ? 'wait' : 'pointer' }}>
+                              {markingAllFor === topic.id ? 'Marking…' : '✓ Mark all'}
+                            </button>
+                          )}
                           {/* upload notes button */}
                           {allMyDone && !alreadyCompleted && (
                             <button type="button" onClick={() => triggerUpload(topic.id)} disabled={uploadingFor === topic.id}
@@ -848,6 +995,41 @@ export default function ProjectDetail() {
                           {alreadyCompleted && (
                             <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Completed</span>
                           )}
+                          {/* View Notes quick link */}
+                          {alreadyCompleted && myCompletions[topic.id]?.signed_url && (
+                            <a href={myCompletions[topic.id].signed_url} target="_blank" rel="noreferrer"
+                              style={{ padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'rgba(34,211,238,0.1)', border: '1px solid var(--accent-border)', color: 'var(--accent)', textDecoration: 'none', cursor: 'pointer' }}>
+                              📎 View Notes
+                            </a>
+                          )}
+                          {alreadyCompleted && (
+                            calendarSyncedTopics.has(topic.id) ? (
+                              <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>📅 Synced</span>
+                            ) : (
+                              <button type="button" onClick={() => syncTopicToCalendar(topic.id)} disabled={calendarSyncingTopic === topic.id}
+                                style={{ padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: calendarSyncingTopic === topic.id ? 'wait' : 'pointer' }}>
+                                {calendarSyncingTopic === topic.id ? '…' : '📅 Sync to Calendar'}
+                              </button>
+                            )
+                          )}
+                          {alreadyCompleted && (
+                            <button
+                              type="button"
+                              onClick={() => { setRevisionModal({ topicId: topic.id, topicTitle: topic.title }); setRevisionNote(''); }}
+                              style={{ padding: '4px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.4)', color: '#8b5cf6', cursor: 'pointer' }}
+                            >
+                              🔁 Revise
+                            </button>
+                          )}
+                          {alreadyCompleted && revisionCounts[topic.id] > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => openRevisionHistory(topic.id, topic.title)}
+                              style={{ padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 600, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                            >
+                              {revisionCounts[topic.id]} revision{revisionCounts[topic.id] !== 1 ? 's' : ''}
+                            </button>
+                          )}
                           {isOwner && (
                             <IconBtn title="Delete topic" danger onClick={() => deleteTopic(topic.id, topic.title)}>✕</IconBtn>
                           )}
@@ -863,31 +1045,64 @@ export default function ProjectDetail() {
                           const comp = pt?.subtopics?.find((s) => s.id === st.id)?.completions || {};
                           const myDone = comp[user.id]?.is_completed;
                           const completors = Object.entries(comp).filter(([, v]) => v.is_completed).map(([uid]) => uid);
+                          const existingNote = comp[user.id]?.personal_note || '';
+                          const isNoteOpen = noteExpanded === st.id;
+                          const noteText = localNotes[st.id] !== undefined ? localNotes[st.id] : existingNote;
                           return (
-                            <div key={st.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                                {/* my checkbox */}
-                                <button type="button" onClick={() => toggleComplete(st.id, myDone)} disabled={togglingSubtopicId === st.id}
-                                  title={myDone ? 'Mark incomplete' : 'Mark complete'}
-                                  style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, background: togglingSubtopicId === st.id ? 'var(--bg-hover)' : myDone ? 'var(--accent)' : 'transparent', border: togglingSubtopicId === st.id || !myDone ? '2px solid var(--border)' : 'none', color: '#fff', cursor: togglingSubtopicId === st.id ? 'wait' : 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' }}>
-                                  {togglingSubtopicId === st.id ? (
-                                    <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                                  ) : myDone ? '✓' : ''}
-                                </button>
-                                <span style={{ fontSize: 14, color: 'var(--text-h)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {st.title}
-                                </span>
-                                {/* who completed this subtopic */}
-                                {completors.length > 0 && (
-                                  <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                                    {completors.map((uid) => (
-                                      <Avatar key={uid} name={memberMap[uid] || uid} size={20} title={`${memberMap[uid] || 'Someone'} ✓`} />
-                                    ))}
-                                  </div>
+                            <div key={st.id}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: isNoteOpen ? 'none' : '1px solid var(--border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                                  {/* my checkbox */}
+                                  <button type="button" onClick={() => toggleComplete(st.id, myDone)} disabled={togglingSubtopicId === st.id}
+                                    title={myDone ? 'Mark incomplete' : 'Mark complete'}
+                                    style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, background: togglingSubtopicId === st.id ? 'var(--bg-hover)' : myDone ? 'var(--accent)' : 'transparent', border: togglingSubtopicId === st.id || !myDone ? '2px solid var(--border)' : 'none', color: '#fff', cursor: togglingSubtopicId === st.id ? 'wait' : 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' }}>
+                                    {togglingSubtopicId === st.id ? (
+                                      <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                                    ) : myDone ? '✓' : ''}
+                                  </button>
+                                  <span style={{ fontSize: 14, color: 'var(--text-h)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {st.title}
+                                  </span>
+                                  {/* who completed this subtopic */}
+                                  {completors.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                                      {completors.map((uid) => (
+                                        <Avatar key={uid} name={memberMap[uid] || uid} size={20} title={`${memberMap[uid] || 'Someone'} ✓`} />
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* personal note toggle */}
+                                  <button
+                                    type="button"
+                                    title={existingNote ? 'Edit note' : 'Add note'}
+                                    onClick={() => {
+                                      if (isNoteOpen) setNoteExpanded(null);
+                                      else { setNoteExpanded(st.id); setLocalNotes((p) => ({ ...p, [st.id]: existingNote })); }
+                                    }}
+                                    style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: existingNote ? 1 : 0.35, transition: 'opacity 0.15s', padding: '0 2px' }}
+                                  >📝</button>
+                                </div>
+                                {isOwner && (
+                                  <IconBtn title="Delete subtopic" danger onClick={() => deleteSubtopic(topic.id, st.id, st.title)}>✕</IconBtn>
                                 )}
                               </div>
-                              {isOwner && (
-                                <IconBtn title="Delete subtopic" danger onClick={() => deleteSubtopic(topic.id, st.id, st.title)}>✕</IconBtn>
+                              {/* expandable note area */}
+                              {isNoteOpen && (
+                                <div style={{ paddingBottom: 10, paddingLeft: 32, borderBottom: '1px solid var(--border)' }}>
+                                  <textarea
+                                    value={noteText}
+                                    onChange={(e) => setLocalNotes((p) => ({ ...p, [st.id]: e.target.value }))}
+                                    onBlur={() => savePersonalNote(st.id)}
+                                    placeholder="Quick note (private, only you can see this)…"
+                                    maxLength={1000}
+                                    rows={2}
+                                    style={{ width: '100%', fontSize: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', resize: 'vertical', boxSizing: 'border-box', marginTop: 6 }}
+                                  />
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(noteText || '').length}/1000 · Auto-saves on blur</span>
+                                    {savingNote === st.id && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Saving…</span>}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           );
@@ -1081,6 +1296,7 @@ export default function ProjectDetail() {
                 {/* ── Contribution / Activity Heatmap ── */}
                 <ContributionGraph
                   timeline={dashboard.timeline}
+                  revisionByUser={dashboard.revisionByUser}
                   members={dashboard.members}
                   memberMap={memberMap}
                 />
@@ -1275,6 +1491,86 @@ export default function ProjectDetail() {
       </main>
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: '', type: 'success' })} />
+
+      {/* ── Revision log modal ── */}
+      {revisionModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => !revisionSaving && setRevisionModal(null)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: 28, maxWidth: 420, width: '100%', boxShadow: 'var(--shadow-lg)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 600, color: 'var(--text-h)' }}>Log a Revision</h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-muted)' }}>{revisionModal.topicTitle}</p>
+            <form onSubmit={submitRevision}>
+              <textarea
+                value={revisionNote}
+                onChange={(e) => setRevisionNote(e.target.value)}
+                placeholder="Optional note — e.g. 'Felt rusty on Big O, re-read chapter 3'"
+                maxLength={500}
+                rows={4}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-h)', fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', marginBottom: 16 }}>{revisionNote.length}/500</div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setRevisionModal(null)} disabled={revisionSaving}
+                  style={{ padding: '9px 20px', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 500 }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={revisionSaving}
+                  style={{ padding: '9px 22px', borderRadius: 'var(--radius)', background: '#8b5cf6', color: '#fff', border: 'none', fontWeight: 600, cursor: revisionSaving ? 'not-allowed' : 'pointer', opacity: revisionSaving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {revisionSaving && <span style={{ width: 13, height: 13, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />}
+                  {revisionSaving ? 'Saving…' : '🔁 Log Revision'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Revision history modal ── */}
+      {revisionHistory && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setRevisionHistory(null)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: 28, maxWidth: 460, width: '100%', maxHeight: '80vh', overflow: 'auto', boxShadow: 'var(--shadow-lg)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600, color: 'var(--text-h)' }}>Revision History</h2>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{revisionHistory.topicTitle}</p>
+              </div>
+              <button type="button" onClick={() => setRevisionHistory(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+            </div>
+            {revisionHistoryLoading ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 14 }}>Loading…</div>
+            ) : revisionHistory.items.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 14 }}>No revisions yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {revisionHistory.items.map((rev) => (
+                  <div key={rev.id} style={{ padding: '12px 14px', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: rev.note ? 8 : 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#8b5cf6' }}>Revision {rev.revision_number}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(rev.revised_at).toLocaleDateString()} {new Date(rev.revised_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <button type="button" onClick={() => doDeleteRevision(rev.id, revisionHistory.topicId, revisionHistory.topicTitle)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 12, opacity: 0.7 }} title="Delete">✕</button>
+                      </div>
+                    </div>
+                    {rev.note && <p style={{ margin: 0, fontSize: 13, color: 'var(--text-h)', lineHeight: 1.5 }}>{rev.note}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button"
+                onClick={() => { setRevisionHistory(null); setRevisionModal({ topicId: revisionHistory.topicId, topicTitle: revisionHistory.topicTitle }); setRevisionNote(''); }}
+                style={{ padding: '8px 18px', borderRadius: 'var(--radius)', background: '#8b5cf6', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+                + Log Another Revision
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -36,13 +36,16 @@ function PersonalHeatmap({ heatmap }) {
   const WEEKS = 26;
   const TOTAL_DAYS = WEEKS * 7;
   const maxVal = Math.max(1, ...Object.values(heatmap || {}));
+  const CELL = 14, GAP = 3, DAY_LABEL_W = 18;
 
-  function getColor(count) {
+  function getColor(count, isRevisionOnly) {
     if (!count) return 'var(--border)';
+    if (isRevisionOnly) return 'rgba(139,92,246,0.6)'; // purple for revision-only days
     const intensity = count / maxVal;
-    if (intensity < 0.25) return 'rgba(34,211,238,0.25)';
-    if (intensity < 0.5) return 'rgba(34,211,238,0.5)';
-    if (intensity < 0.75) return 'rgba(34,211,238,0.75)';
+    if (intensity < 0.2) return 'rgba(34,211,238,0.2)';
+    if (intensity < 0.4) return 'rgba(34,211,238,0.4)';
+    if (intensity < 0.65) return 'rgba(34,211,238,0.65)';
+    if (intensity < 0.85) return 'rgba(34,211,238,0.85)';
     return 'var(--accent)';
   }
 
@@ -59,6 +62,7 @@ function PersonalHeatmap({ heatmap }) {
   const weeks = [];
   for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7));
 
+  // Month labels — one per month, positioned at the week where the 1st falls
   const monthLabels = [];
   weeks.forEach((wk, wi) => {
     const firstReal = wk.find(Boolean);
@@ -71,63 +75,84 @@ function PersonalHeatmap({ heatmap }) {
   });
 
   const [tooltip, setTooltip] = useState(null);
+  const containerRef = useState(null)[0];
 
   return (
-    <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '20px', marginBottom: 28, overflowX: 'auto' }}>
+    <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '20px', marginBottom: 24, overflowX: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text-h)' }}>📅 Your activity</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
           <span>Less</span>
-          {['var(--border)','rgba(34,211,238,0.25)','rgba(34,211,238,0.5)','rgba(34,211,238,0.75)','var(--accent)'].map((c,i) => (
-            <div key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,0.06)' }} />
+          {['var(--border)','rgba(34,211,238,0.2)','rgba(34,211,238,0.4)','rgba(34,211,238,0.65)','var(--accent)'].map((c,i) => (
+            <div key={i} style={{ width: CELL, height: CELL, borderRadius: 3, background: c, border: '1px solid rgba(0,0,0,0.08)' }} />
           ))}
           <span>More</span>
+          <div style={{ width: CELL, height: CELL, borderRadius: 3, background: 'rgba(139,92,246,0.6)', border: '1px solid rgba(0,0,0,0.08)' }} />
+          <span style={{ color: '#8b5cf6' }}>Revision</span>
         </div>
       </div>
-      <div style={{ display: 'flex', marginBottom: 4, paddingLeft: 22 }}>
+
+      {/* Month labels row */}
+      <div style={{ display: 'flex', marginBottom: 4, paddingLeft: DAY_LABEL_W + 4 }}>
         {weeks.map((_, wi) => {
           const ml = monthLabels.find(m => m.wi === wi);
-          return <div key={wi} style={{ width: 13, marginRight: 2, fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>{ml?.label || ''}</div>;
+          return (
+            <div key={wi} style={{ width: CELL + GAP, fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, overflow: 'hidden', textOverflow: 'clip' }}>
+              {ml?.label || ''}
+            </div>
+          );
         })}
       </div>
-      <div style={{ display: 'flex', gap: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4 }}>
-          {['','M','','W','','F',''].map((d, i) => (
-            <div key={i} style={{ height: 11, fontSize: 9, color: 'var(--text-muted)', lineHeight: '11px', width: 14, textAlign: 'right' }}>{d}</div>
+
+      <div style={{ display: 'flex', gap: 0, position: 'relative' }}>
+        {/* Day labels */}
+        <div style={{ display: 'flex', flexDirection: 'column', marginRight: 4, gap: GAP, paddingTop: 0 }}>
+          {['','M','','W','','F',''].map((label, i) => (
+            <div key={i} style={{ height: CELL, fontSize: 9, color: 'var(--text-muted)', lineHeight: `${CELL}px`, width: DAY_LABEL_W, textAlign: 'right' }}>{label}</div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 2 }}>
+
+        {/* Grid */}
+        <div style={{ display: 'flex', gap: GAP, position: 'relative' }}>
           {weeks.map((wk, wi) => (
-            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
               {wk.map((day, di) => (
                 <div
                   key={di}
-                  onMouseEnter={day ? (e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTooltip({ x: rect.left, y: rect.top - 36, text: `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}` });
-                  } : undefined}
+                  title={day ? `${day.dateStr}: ${day.count} completion${day.count !== 1 ? 's' : ''}` : undefined}
+                  onMouseEnter={day ? () => setTooltip({ dateStr: day.dateStr, count: day.count, wi, di }) : undefined}
                   onMouseLeave={() => setTooltip(null)}
                   style={{
-                    width: 11, height: 11, borderRadius: 2,
-                    background: day ? getColor(day.count) : 'transparent',
-                    border: day ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                    width: CELL, height: CELL, borderRadius: 3,
+                    background: day ? getColor(day.count, false) : 'transparent',
+                    border: day ? '1px solid rgba(0,0,0,0.08)' : 'none',
                     cursor: day ? 'pointer' : 'default',
+                    transition: 'transform 0.1s',
+                    flexShrink: 0,
                   }}
+                  onMouseEnterCapture={undefined}
                 />
               ))}
             </div>
           ))}
+
+          {/* Tooltip inside grid */}
+          {tooltip && (
+            <div style={{
+              position: 'absolute',
+              left: tooltip.wi * (CELL + GAP) + CELL / 2,
+              top: tooltip.di * (CELL + GAP) - 36,
+              transform: 'translateX(-50%)',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: '5px 10px', fontSize: 11,
+              color: 'var(--text-h)', zIndex: 50, pointerEvents: 'none',
+              whiteSpace: 'nowrap', boxShadow: 'var(--shadow)',
+            }}>
+              {tooltip.dateStr}: {tooltip.count} completion{tooltip.count !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       </div>
-      {tooltip && (
-        <div style={{
-          position: 'fixed', left: tooltip.x, top: tooltip.y,
-          background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '6px 10px', fontSize: 11,
-          color: 'var(--text-h)', zIndex: 9999, pointerEvents: 'none',
-          boxShadow: 'var(--shadow)',
-        }}>{tooltip.text}</div>
-      )}
     </div>
   );
 }
@@ -316,7 +341,50 @@ export default function Profile() {
             </div>
           ) : (
             <>
+              {/* Streak cards */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 140px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Streak</span>
+                  <span style={{ fontSize: 28, fontWeight: 800, color: (data?.streak || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)', lineHeight: 1 }}>
+                    {data?.streak || 0} <span style={{ fontSize: 14, fontWeight: 500 }}>day{(data?.streak || 0) !== 1 ? 's' : ''}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(data?.streak || 0) > 0 ? '🔥 Keep it up!' : '🌱 Study today to start'}</span>
+                </div>
+                <div style={{ flex: '1 1 140px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Highest Streak</span>
+                  <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>
+                    {data?.highest_streak || 0} <span style={{ fontSize: 14, fontWeight: 500 }}>day{(data?.highest_streak || 0) !== 1 ? 's' : ''}</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏆 Personal best</span>
+                </div>
+              </div>
+
               <PersonalHeatmap heatmap={data?.heatmap} />
+
+              {/* Weekly summary */}
+              {data?.weekly_summary && (
+                <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '16px 20px', marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-h)', marginBottom: 12 }}>
+                    📊 This week
+                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+                      {data.weekly_summary.week_start} → {data.weekly_summary.week_end}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+                    {[
+                      { label: 'Subtopics done', value: data.weekly_summary.subtopics_completed, color: 'var(--accent)' },
+                      { label: 'Topics completed', value: data.weekly_summary.topics_done, color: 'var(--success)' },
+                      { label: 'Revisions', value: data.weekly_summary.revisions, color: '#8b5cf6' },
+                      { label: 'Active days', value: `${data.weekly_summary.active_days} / 7`, color: 'var(--warning)' },
+                    ].map((s) => (
+                      <div key={s.label} style={{ textAlign: 'center', padding: '10px 8px', borderRadius: 'var(--radius)', background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Nudge: always shown — nextUp (priority), appreciation, or fallback */}
               <div style={{
@@ -428,11 +496,21 @@ export default function Profile() {
                     <div key={i} style={{
                       display: 'flex', alignItems: 'center', gap: 16,
                       padding: '12px 16px', borderRadius: 'var(--radius)',
-                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      background: item.type === 'revision' ? 'rgba(139,92,246,0.07)' : 'var(--bg-card)',
+                      border: `1px solid ${item.type === 'revision' ? 'rgba(139,92,246,0.25)' : 'var(--border)'}`,
                       flexWrap: 'wrap',
                     }}>
                       <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, minWidth: 90 }}>
                         {item.date}
+                      </span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        padding: '2px 7px', borderRadius: 4,
+                        background: item.type === 'revision' ? 'rgba(139,92,246,0.2)' : item.type === 'topic' ? 'var(--success-dim)' : 'var(--accent-dim)',
+                        color: item.type === 'revision' ? '#8b5cf6' : item.type === 'topic' ? 'var(--success)' : 'var(--accent)',
+                        flexShrink: 0,
+                      }}>
+                        {item.type === 'revision' ? '🔁 Revised' : item.type === 'topic' ? '✓ Notes' : '✓'}
                       </span>
                       <span style={{ fontSize: 14, color: 'var(--text-h)', fontWeight: 500 }}>
                         {item.topic}{item.subtopic ? ` — ${item.subtopic}` : ''}

@@ -66,4 +66,12 @@ async function removeMember(req, res, next) {
   }
 }
 
-module.exports = { create, list, getById, update, remove, getMembers, removeMember };
+async function togglePin(req, res, next) {
+  try {
+    const { is_pinned } = req.body || {};
+    const data = await projectService.updatePin(req.params.projectId, req.user.id, !!is_pinned);
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+}
+
+module.exports = { create, list, getById, update, remove, getMembers, removeMember, togglePin };

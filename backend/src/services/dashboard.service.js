@@ -38,6 +38,7 @@ async function _computeDashboard(projectId) {
   const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
   const { data: progress } = await supabase.from('subtopic_progress').select('user_id, subtopic_id, completed_at').eq('project_id', projectId).eq('is_completed', true);
   const { data: completions } = await supabase.from('topic_completions').select('user_id, topic_id, uploaded_at').eq('project_id', projectId);
+  const { data: revisions } = await supabase.from('topic_revisions').select('user_id, revised_at').eq('project_id', projectId);
   const memberStats = userIds.map((uid) => {
     const subDone = (progress || []).filter((p) => p.user_id === uid).length;
     const topDone = (completions || []).filter((c) => c.user_id === uid).length;
@@ -64,6 +65,22 @@ async function _computeDashboard(projectId) {
     if (!byUser[p.user_id][d]) byUser[p.user_id][d] = 0;
     byUser[p.user_id][d]++;
   });
+  // Also count topic completions + revisions in heatmap
+  (completions || []).forEach((c) => {
+    const d = c.uploaded_at?.slice(0, 10);
+    if (!d) return;
+    if (!byUser[c.user_id]) byUser[c.user_id] = {};
+    if (!byUser[c.user_id][d]) byUser[c.user_id][d] = 0;
+    byUser[c.user_id][d]++;
+  });
+  // Revision dates per user (for heatmap overlay)
+  const revisionByUser = {};
+  (revisions || []).forEach((r) => {
+    const d = r.revised_at?.slice(0, 10);
+    if (!d) return;
+    if (!revisionByUser[r.user_id]) revisionByUser[r.user_id] = {};
+    revisionByUser[r.user_id][d] = (revisionByUser[r.user_id][d] || 0) + 1;
+  });
   const timeline = {};
   Object.entries(byUser).forEach(([uid, dates]) => {
     let cum = 0;
@@ -79,6 +96,7 @@ async function _computeDashboard(projectId) {
     members: memberStats,
     leaderboard,
     timeline,
+    revisionByUser,
   };
 }
 

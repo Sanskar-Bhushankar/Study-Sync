@@ -45,14 +45,24 @@ async function completeTopic(projectId, topicId, userId, file) {
     .single();
   if (error) {
     console.error('[completeTopic] DB insert error — code:', error.code, '| message:', error.message, '| hint:', error.hint, '| details:', error.details);
-    // Surface a readable message: if it's an RLS error, give a clear hint
     const isRls = error.code === '42501' || (error.message || '').toLowerCase().includes('rls') || (error.message || '').toLowerCase().includes('policy');
     const msg = isRls
       ? `Database permission denied (RLS policy). Run the SQL fix in Supabase. Original: ${error.message}`
       : (error.message || JSON.stringify(error));
     throw new Error(msg);
   }
-  return { ...data, signed_url: signedUrl };
+
+  const result = { ...data, signed_url: signedUrl };
+  const googleCalendar = require('./googleCalendar.service');
+  googleCalendar.safeSync(
+    googleCalendar.createTopicCompleteEvent(userId, {
+      projectId,
+      topicId,
+      completedAt: data.uploaded_at,
+      trigger: 'auto',
+    })
+  );
+  return result;
 }
 
 async function listCompletions(projectId, topicId) {

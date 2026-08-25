@@ -49,10 +49,21 @@ async function getProfileActivity(userId) {
     .eq('user_id', userId);
   if (topicErr) throw topicErr;
 
+  // 3. Revisions
+  const { data: revisionRows } = await supabase
+    .from('topic_revisions')
+    .select('revised_at, topic_id, project_id')
+    .eq('user_id', userId);
+
   const subIds = [...new Set((subRows || []).map((r) => r.subtopic_id))];
   const topicIdsFromSubs = [];
   const topicIdsFromCompletions = [...new Set((topicRows || []).map((r) => r.topic_id))];
-  const projectIds = [...new Set([...(subRows || []).map((r) => r.project_id), ...(topicRows || []).map((r) => r.project_id)])];
+  const topicIdsFromRevisions = [...new Set((revisionRows || []).map((r) => r.topic_id))];
+  const projectIds = [...new Set([
+    ...(subRows || []).map((r) => r.project_id),
+    ...(topicRows || []).map((r) => r.project_id),
+    ...(revisionRows || []).map((r) => r.project_id),
+  ])];
 
   let subtopicMeta = {};
   let topicMeta = {};
@@ -64,7 +75,7 @@ async function getProfileActivity(userId) {
     subs = r.data || [];
     subs.forEach((s) => { topicIdsFromSubs.push(s.topic_id); });
   }
-  const allTopicIds = [...new Set([...topicIdsFromSubs, ...topicIdsFromCompletions])];
+  const allTopicIds = [...new Set([...topicIdsFromSubs, ...topicIdsFromCompletions, ...topicIdsFromRevisions])];
   if (allTopicIds.length > 0) {
     const { data: topics } = await supabase.from('topics').select('id, title, project_id').in('id', allTopicIds);
     (topics || []).forEach((t) => { topicMeta[t.id] = t.title; });
@@ -103,31 +114,73 @@ async function getProfileActivity(userId) {
     const topicTitle = topicMeta[r.topic_id] || 'Unknown';
     add(d, { type: 'topic', project: projTitle, topic: topicTitle, subtopic: null, raw: r.uploaded_at });
   }
+  for (const r of revisionRows || []) {
+    const d = r.revised_at ? r.revised_at.slice(0, 10) : null;
+    if (!d) continue;
+    const projTitle = projectMeta[r.project_id] || 'Unknown';
+    const topicTitle = topicMeta[r.topic_id] || 'Unknown';
+    add(d, { type: 'revision', project: projTitle, topic: topicTitle, subtopic: null, raw: r.revised_at });
+  }
 
   completed.sort((a, b) => (b.raw || '').localeCompare(a.raw || ''));
 
   const nextUp = await getNextUp(userId);
-  const streak = computeStreak(heatmap);
+  const currentStreak = computeStreak(heatmap);
+
+  // Update highest_streak if current exceeds stored value
+  const { data: prof } = await supabase.from('profiles').select('highest_streak').eq('id', userId).single();
+  const highestStreak = Math.max(currentStreak, prof?.highest_streak || 0);
+  if (currentStreak > (prof?.highest_streak || 0)) {
+    await supabase.from('profiles').update({ highest_streak: currentStreak }).eq('id', userId);
+  }
+
   const recentTopicCompletion = getRecentTopicCompletion(userId, completed);
 
-  return { heatmap, completed, byDate, nextUp, streak, recentTopicCompletion };
+  // Weekly summary — no extra DB queries needed
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dow = new Date().getUTCDay();
+  const weekStartDate = new Date(Date.now() - dow * 86400000);
+  const weekStartStr = weekStartDate.toISOString().slice(0, 10);
+  const thisWeekItems = completed.filter((c) => c.date >= weekStartStr && c.date <= todayStr);
+  const weekly_summary = {
+    week_start: weekStartStr,
+    week_end: todayStr,
+    subtopics_completed: thisWeekItems.filter((c) => c.type === 'subtopic').length,
+    topics_done: thisWeekItems.filter((c) => c.type === 'topic').length,
+    revisions: thisWeekItems.filter((c) => c.type === 'revision').length,
+    active_days: new Set(thisWeekItems.map((c) => c.date)).size,
+  };
+
+  return { heatmap, completed, byDate, nextUp, streak: currentStreak, highest_streak: highestStreak, recentTopicCompletion, weekly_summary };
 }
 
 /**
- * Compute consecutive activity days. Uses the most recent activity date as the "end"
- * (avoids UTC vs local timezone mismatch). Streak = consecutive days from max activity date backwards.
+ * Compute consecutive activity days. Streak is 0 if last activity was more than
+ * 2 days ago (1 forgiveness gap allowed). Counts back from most recent active date.
  */
 function computeStreak(heatmap) {
   if (!heatmap || Object.keys(heatmap).length === 0) return 0;
   const dates = Object.keys(heatmap).filter((d) => (heatmap[d] || 0) > 0);
   if (dates.length === 0) return 0;
   const mostRecent = dates.sort().reverse()[0];
+
+  // Allow 1 forgiveness gap day: streak breaks only if last activity > 2 days ago
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  if (mostRecent < twoDaysAgo) return 0;
+
   let streak = 0;
-  let d = new Date(mostRecent + 'T12:00:00Z'); // noon UTC to avoid DST edge cases
+  let gapAllowed = 1;
+  let d = new Date(mostRecent + 'T12:00:00Z');
   for (let i = 0; i < 365; i++) {
     const dateStr = d.toISOString().slice(0, 10);
-    if ((heatmap[dateStr] || 0) > 0) streak++;
-    else break;
+    if ((heatmap[dateStr] || 0) > 0) {
+      streak++;
+      gapAllowed = 1; // reset forgiveness after an active day
+    } else if (gapAllowed > 0) {
+      gapAllowed--; // use up forgiveness day, no streak increment
+    } else {
+      break;
+    }
     d.setUTCDate(d.getUTCDate() - 1);
   }
   return streak;
@@ -187,6 +240,7 @@ function getRecentTopicCompletion(userId, completed) {
 
 /**
  * Lightweight stats for navbar. Returns activityDates for client-side streak (timezone-safe).
+ * Also includes revisions so they count toward streak.
  */
 async function getStats(userId) {
   const dates = new Set();
@@ -204,10 +258,25 @@ async function getStats(userId) {
     .eq('user_id', userId);
   (topicRows || []).forEach((r) => r.uploaded_at && dates.add(r.uploaded_at.slice(0, 10)));
 
+  const { data: revisionRows } = await supabase
+    .from('topic_revisions')
+    .select('revised_at')
+    .eq('user_id', userId);
+  (revisionRows || []).forEach((r) => r.revised_at && dates.add(r.revised_at.slice(0, 10)));
+
   const activityDates = [...dates];
   const heatmap = {};
   activityDates.forEach((d) => { heatmap[d] = 1; });
-  return { streak: computeStreak(heatmap), activityDates };
+  const currentStreak = computeStreak(heatmap);
+
+  // Update highest_streak if current exceeds stored value
+  const { data: prof } = await supabase.from('profiles').select('highest_streak').eq('id', userId).single();
+  const highestStreak = Math.max(currentStreak, prof?.highest_streak || 0);
+  if (currentStreak > (prof?.highest_streak || 0)) {
+    await supabase.from('profiles').update({ highest_streak: currentStreak }).eq('id', userId);
+  }
+
+  return { streak: currentStreak, highest_streak: highestStreak, activityDates };
 }
 
 module.exports = { getProfile, updateProfile, getPendingInvites, getProfileActivity, getStats };

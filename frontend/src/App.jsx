@@ -10,6 +10,7 @@ import './index.css';
 const Projects = lazy(() => import('./pages/Projects'));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
 const Profile = lazy(() => import('./pages/Profile'));
+const Calendar = lazy(() => import('./pages/Calendar'));
 const Invitations = lazy(() => import('./pages/Invitations'));
 const OnlineCompiler = lazy(() => import('./pages/OnlineCompiler'));
 
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
         <Route path="/projects/:projectId" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+        <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/invitations" element={<PrivateRoute><Invitations /></PrivateRoute>} />
         <Route path="/compiler" element={<PrivateRoute><OnlineCompiler /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />

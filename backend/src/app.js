@@ -16,6 +16,9 @@ const subtopicRoutes = require('./routes/subtopic.routes');
 const progressRoutes = require('./routes/progress.routes');
 const completionRoutes = require('./routes/completion.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const revisionRoutes = require('./routes/revision.routes');
+const googleCalendarRoutes = require('./routes/googleCalendar.routes');
+const googleCalendarController = require('./controllers/googleCalendar.controller');
 const errorHandler = require('./middleware/errorHandler');
 
 const ALLOWED_ORIGINS = [
@@ -110,6 +113,8 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/api/v1/auth', authLimiter, authRoutes);
+// Google OAuth callback — public (Google redirects here without a Bearer token)
+app.get('/api/v1/integrations/google/callback', apiLimiter, googleCalendarController.callback);
 app.use('/api/v1/users', apiLimiter, userRoutes);
 // Explicit bulk route — must be before /api/v1/projects to avoid being shadowed
 app.post('/api/v1/projects/:projectId/topics/bulk', apiLimiter, authenticate, isMember, isOwner, topicController.createBulk);
@@ -119,6 +124,8 @@ app.use('/api/v1', apiLimiter, subtopicRoutes);
 app.use('/api/v1', apiLimiter, progressRoutes);
 app.use('/api/v1', apiLimiter, completionRoutes);
 app.use('/api/v1', apiLimiter, dashboardRoutes);
+app.use('/api/v1', apiLimiter, revisionRoutes);
+app.use('/api/v1', apiLimiter, googleCalendarRoutes);
 app.use('/api/v1/projects', apiLimiter, projectRoutes);
 
 app.use(errorHandler);

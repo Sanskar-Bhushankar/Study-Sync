@@ -55,12 +55,14 @@ export default function Projects() {
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // project object
+  const [pinningId, setPinningId] = useState(null);
   const { user, logout } = useAuth();
   const {
     projects: list,
     projectsLoading,
     projectsHydrated,
     ensureProjectsLoaded,
+    invalidateProjectsCache,
     prependProject,
     removeProjectFromCache,
   } = useProjectsCache();
@@ -84,6 +86,26 @@ export default function Projects() {
       setDeletingId(null);
       setConfirmDelete(null);
     }
+  }
+
+  async function togglePin(project, e) {
+    e.preventDefault(); e.stopPropagation();
+    setPinningId(project.id);
+    try {
+      await api.patch(`/projects/${project.id}/pin`, { is_pinned: !project.is_pinned });
+      invalidateProjectsCache();
+      await ensureProjectsLoaded();
+    } catch (_) {} finally { setPinningId(null); }
+  }
+
+  function formatLastActivity(dateStr) {
+    if (!dateStr) return null;
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7) return `${diff}d ago`;
+    if (diff < 30) return `${Math.floor(diff / 7)}w ago`;
+    return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   }
 
   async function createProject(e) {
@@ -145,12 +167,13 @@ export default function Projects() {
           </div>
         ) : list.length === 0 ? (
           <div style={{ padding: 64, borderRadius: 'var(--radius-xl)', border: '1px dashed var(--border)', textAlign: 'center', background: 'var(--bg-card)' }}>
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.8 }}>📂</div>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📖</div>
             <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600 }}>No projects yet</h2>
-            <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 14 }}>Create your first project to start tracking progress.</p>
+            <p style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 14 }}>Create your first project to start tracking your study progress.</p>
+            <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 13 }}>Add topics, tick off subtopics, and build your streak.</p>
             <button type="button" onClick={() => setShowForm(true)}
-              style={{ padding: '12px 24px', borderRadius: 'var(--radius)', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: 14 }}>
-              ＋ New Project
+              style={{ padding: '12px 28px', borderRadius: 'var(--radius)', background: 'var(--accent)', color: 'var(--bg)', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: 14 }}>
+              ＋ Create your first project
             </button>
           </div>
         ) : (
@@ -160,16 +183,31 @@ export default function Projects() {
               <div key={p.id} style={{ position: 'relative' }}>
                 <Link to={`/projects/${p.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                   <div style={{
-                    borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', background: 'var(--bg-card)',
+                    borderRadius: 'var(--radius-lg)', border: `1px solid ${p.is_pinned ? 'var(--accent-border)' : 'var(--border)'}`, background: 'var(--bg-card)',
                     padding: 22, display: 'flex', flexDirection: 'column', gap: 12,
-                    boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s ease',
+                    boxShadow: p.is_pinned ? '0 4px 16px rgba(34,211,238,0.12)' : 'var(--shadow-sm)', transition: 'all 0.2s ease',
                     cursor: 'pointer', minHeight: 150,
                   }}
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-border)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'none'; }}>
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = p.is_pinned ? 'var(--accent-border)' : 'var(--border)'; e.currentTarget.style.boxShadow = p.is_pinned ? '0 4px 16px rgba(34,211,238,0.12)' : 'var(--shadow-sm)'; e.currentTarget.style.transform = 'none'; }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ fontSize: 26 }}>📖</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 26 }}>{p.is_pinned ? '📌' : '📖'}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => togglePin(p, e)}
+                          disabled={pinningId === p.id}
+                          title={p.is_pinned ? 'Unpin project' : 'Pin project'}
+                          style={{
+                            padding: '4px 9px', borderRadius: 'var(--radius-sm)', fontSize: 10, fontWeight: 600,
+                            background: p.is_pinned ? 'rgba(34,211,238,0.12)' : 'var(--bg-elevated)',
+                            border: `1px solid ${p.is_pinned ? 'var(--accent-border)' : 'var(--border)'}`,
+                            color: p.is_pinned ? 'var(--accent)' : 'var(--text-muted)', cursor: pinningId === p.id ? 'not-allowed' : 'pointer',
+                            opacity: pinningId === p.id ? 0.5 : 1, transition: 'all 0.15s',
+                          }}
+                        >
+                          {p.is_pinned ? '📌 Pinned' : '📌'}
+                        </button>
                         <Badge color={p.role}>{p.role}</Badge>
                         {p.role === 'owner' && (
                           <button
@@ -181,13 +219,12 @@ export default function Projects() {
                               padding: '5px 11px', borderRadius: 'var(--radius-sm)', fontSize: 11, fontWeight: 600,
                               background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.3)',
                               color: 'var(--danger)', cursor: deletingId === p.id ? 'not-allowed' : 'pointer',
-                              opacity: deletingId === p.id ? 0.6 : 1,
-                              transition: 'all 0.15s',
+                              opacity: deletingId === p.id ? 0.6 : 1, transition: 'all 0.15s',
                             }}
                             onMouseEnter={(e) => { if (deletingId !== p.id) e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--danger-dim)'; }}
                           >
-                            {deletingId === p.id ? 'Deleting…' : '🗑 Delete'}
+                            {deletingId === p.id ? 'Deleting…' : '🗑'}
                           </button>
                         )}
                       </div>
@@ -196,8 +233,15 @@ export default function Projects() {
                       <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-h)', marginBottom: 4, letterSpacing: '-0.01em' }}>{p.title}</div>
                       {p.description && <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>{p.description}</div>}
                     </div>
-                    <div style={{ marginTop: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
-                      Created {new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Created {new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      {formatLastActivity(p.last_activity) && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 7px' }}>
+                          Last: {formatLastActivity(p.last_activity)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </Link>

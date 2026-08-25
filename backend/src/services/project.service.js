@@ -12,10 +12,47 @@ async function create(title, description, userId) {
 async function listByUser(userId) {
   const { data, error } = await supabase
     .from('project_members')
-    .select('project_id, role, joined_at, projects(id, title, description, created_by, created_at)')
+    .select('project_id, role, joined_at, is_pinned, projects(id, title, description, created_by, created_at)')
     .eq('user_id', userId);
   if (error) throw error;
-  return (data || []).map((m) => ({ ...m.projects, role: m.role, joined_at: m.joined_at }));
+  const projects = (data || []).map((m) => ({
+    ...m.projects, role: m.role, joined_at: m.joined_at, is_pinned: m.is_pinned || false,
+  }));
+  if (projects.length === 0) return [];
+
+  const projectIds = projects.map((p) => p.id);
+  const [{ data: subActivity }, { data: topicActivity }, { data: revisionActivity }] = await Promise.all([
+    supabase.from('subtopic_progress').select('project_id, completed_at').eq('user_id', userId).in('project_id', projectIds).eq('is_completed', true).not('completed_at', 'is', null),
+    supabase.from('topic_completions').select('project_id, uploaded_at').eq('user_id', userId).in('project_id', projectIds),
+    supabase.from('topic_revisions').select('project_id, revised_at').eq('user_id', userId).in('project_id', projectIds),
+  ]);
+
+  const lastActivity = {};
+  const setIfNewer = (pid, dateStr) => {
+    if (dateStr && (!lastActivity[pid] || dateStr > lastActivity[pid])) lastActivity[pid] = dateStr;
+  };
+  (subActivity || []).forEach((r) => setIfNewer(r.project_id, r.completed_at));
+  (topicActivity || []).forEach((r) => setIfNewer(r.project_id, r.uploaded_at));
+  (revisionActivity || []).forEach((r) => setIfNewer(r.project_id, r.revised_at));
+
+  return projects
+    .map((p) => ({ ...p, last_activity: lastActivity[p.id] || null }))
+    .sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+      const aDate = a.last_activity || a.created_at || '';
+      const bDate = b.last_activity || b.created_at || '';
+      return bDate.localeCompare(aDate);
+    });
+}
+
+async function updatePin(projectId, userId, isPinned) {
+  const { error } = await supabase
+    .from('project_members')
+    .update({ is_pinned: isPinned })
+    .eq('project_id', projectId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return { is_pinned: isPinned };
 }
 
 async function getById(projectId) {
@@ -48,6 +85,7 @@ async function remove(projectId) {
   const tables = [
     'subtopic_progress',
     'topic_completions',
+    'topic_revisions',
     'project_invites',
     'project_members',
     'topics',
@@ -77,4 +115,4 @@ async function removeMember(projectId, userId) {
   if (error) throw error;
 }
 
-module.exports = { create, listByUser, getById, update, remove, getMembers, removeMember };
+module.exports = { create, listByUser, getById, update, remove, getMembers, removeMember, updatePin };

@@ -6,18 +6,27 @@ export function extractActivityPayload(r) {
   return inner;
 }
 
-/** Match backend `computeStreak` (UTC) when deriving from heatmap keys. */
+/** Match backend `computeStreak` (UTC) with 1 forgiveness gap day. */
 export function computeStreakFromDates(activityDates) {
   if (!activityDates?.length) return 0;
   const set = new Set(activityDates);
   const sorted = [...set].sort().reverse();
   const mostRecent = sorted[0];
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  if (mostRecent < twoDaysAgo) return 0;
   let streak = 0;
+  let gapAllowed = 1;
   const d = new Date(mostRecent + 'T12:00:00Z');
   for (let i = 0; i < 365; i++) {
     const dateStr = d.toISOString().slice(0, 10);
-    if (set.has(dateStr)) streak++;
-    else break;
+    if (set.has(dateStr)) {
+      streak++;
+      gapAllowed = 1;
+    } else if (gapAllowed > 0) {
+      gapAllowed--;
+    } else {
+      break;
+    }
     d.setUTCDate(d.getUTCDate() - 1);
   }
   return streak;

@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [headerStreak, setHeaderStreak] = useState(0);
+  const [headerHighestStreak, setHeaderHighestStreak] = useState(0);
   const [pendingInvites, setPendingInvites] = useState(0);
   const headerStatsGen        = useRef(0);
   const initialized           = useRef(false);
@@ -77,6 +78,9 @@ export function AuthProvider({ children }) {
     if (profileRes.ok) {
       const payload = extractActivityPayload(profileRes.r);
       setHeaderStreak(streakFromPayload(payload));
+      if (typeof payload.highest_streak === 'number') {
+        setHeaderHighestStreak(payload.highest_streak);
+      }
     }
 
     if (invitesRes.ok) {
@@ -131,6 +135,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     headerStatsGen.current += 1;
     setHeaderStreak(0);
+    setHeaderHighestStreak(0);
     setPendingInvites(0);
   };
 
@@ -152,6 +157,7 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
       headerStreak,
+      headerHighestStreak,
       pendingInvites,
       refreshHeaderStats,
     }}>

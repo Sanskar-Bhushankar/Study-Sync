@@ -13,5 +13,6 @@ router.patch('/:projectId', isMember, isOwner, projectController.update);
 router.delete('/:projectId', isMember, isOwner, projectController.remove);
 router.get('/:projectId/members', isMember, projectController.getMembers);
 router.delete('/:projectId/members/:userId', isMember, isOwner, projectController.removeMember);
+router.patch('/:projectId/pin', isMember, projectController.togglePin);
 
 module.exports = router;

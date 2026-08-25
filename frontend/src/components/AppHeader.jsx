@@ -16,9 +16,10 @@ export default function AppHeader({
   onDeleteProject,
 }) {
   const location = useLocation();
-  const { headerStreak, pendingInvites } = useAuth();
+  const { headerStreak, headerHighestStreak, pendingInvites } = useAuth();
 
   const isProfile = location.pathname === '/profile';
+  const isCalendar = location.pathname === '/calendar';
   const isProjects = location.pathname === '/projects';
   const isCompiler = location.pathname === '/compiler';
 
@@ -94,6 +95,20 @@ export default function AppHeader({
                 Compiler
               </Link>
               <Link
+                to="/calendar"
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius)',
+                  fontSize: 13,
+                  fontWeight: isCalendar ? 600 : 500,
+                  color: isCalendar ? 'var(--accent)' : 'var(--text-muted)',
+                  background: isCalendar ? 'var(--accent-dim)' : 'transparent',
+                  textDecoration: 'none',
+                }}
+              >
+                Calendar
+              </Link>
+              <Link
                 to="/profile"
                 style={{
                   padding: '6px 10px',
@@ -159,8 +174,11 @@ export default function AppHeader({
           <span style={{
             fontSize: 12, color: headerStreak > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 600,
             display: 'flex', alignItems: 'center', gap: 4,
-          }} title="Consecutive days with activity">
-            🔥 {headerStreak} day{headerStreak !== 1 ? 's' : ''} streak
+          }} title={headerStreak > 0 ? `Current streak: ${headerStreak} day${headerStreak !== 1 ? 's' : ''} · Best: ${headerHighestStreak} day${headerHighestStreak !== 1 ? 's' : ''}` : 'Study today to start your streak!'}>
+            {headerStreak > 0
+              ? <>🔥 {headerStreak} day{headerStreak !== 1 ? 's' : ''} streak{headerHighestStreak > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · 🏆 {headerHighestStreak}</span>}</>
+              : <>🌱 Start your streak</>
+            }
           </span>
         </div>
         {variant === 'project' && onDeleteProject && (
